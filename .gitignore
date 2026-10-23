@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+backend/models/*.joblib
+backend/data/cache/*.csv
+.DS_Store
+node_modules/
+.next/
+dist/

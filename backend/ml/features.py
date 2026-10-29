@@ -407,29 +407,43 @@ class FeatureStore:
         }
 
     def get_league_standings(self, league_code: str, season: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Compute current season league table with xG, GD, Form, and Elo."""
+        """Compute accurate league table with xG, GD, Form, and Elo for the target season."""
         lg_df = self.df[self.df["league"] == league_code]
         if season is None:
-            if not lg_df.empty and "season" in lg_df.columns:
-                season = str(lg_df["season"].iloc[-1])
-            else:
-                season = get_current_season_label()
+            season = get_current_season_label()
 
         sub = lg_df[lg_df["season"] == season]
-        if sub.empty:
-            sub = lg_df
+        if sub.empty and not lg_df.empty:
+            season = str(lg_df["season"].iloc[-1])
+            sub = lg_df[lg_df["season"] == season]
+
+        # Active teams in this league for this season
+        active_teams = set(sub["home_team"].unique()) | set(sub["away_team"].unique()) if not sub.empty else set()
+        if not active_teams:
+            for name, meta in self.clubs.items():
+                if league_code == "CL" and meta.get("ucl_participant"):
+                    active_teams.add(name)
+                elif league_code != "CL" and meta.get("league") == league_code:
+                    active_teams.add(name)
 
         stats: Dict[str, Dict[str, Any]] = {}
-        for name, meta in self.clubs.items():
-            if league_code == "CL" and not meta["ucl_participant"]:
-                continue
-            if league_code != "CL" and meta["league"] != league_code:
-                continue
+        for name in active_teams:
+            meta = self.clubs.get(name) or register_dynamic_club(name, league_code)
+            # Compute form from chronological matches within this season
+            season_team_matches = sub[(sub["home_team"] == name) | (sub["away_team"] == name)].sort_values("date")
+            form_5 = []
+            for _, m in season_team_matches.tail(5).iterrows():
+                if m["home_team"] == name:
+                    res = "W" if m["ftr"] == "H" else ("D" if m["ftr"] == "D" else "L")
+                else:
+                    res = "W" if m["ftr"] == "A" else ("D" if m["ftr"] == "D" else "L")
+                form_5.append(res)
+
             stats[name] = {
                 "team": name,
-                "short_name": meta["short_name"],
-                "tla": meta["tla"],
-                "color": meta["primary_color"],
+                "short_name": meta.get("short_name", name[:14]),
+                "tla": meta.get("tla", name[:3].upper()),
+                "color": meta.get("primary_color", "#1E293B"),
                 "played": 0,
                 "won": 0,
                 "drawn": 0,
@@ -440,8 +454,8 @@ class FeatureStore:
                 "points": 0,
                 "xg": 0.0,
                 "xga": 0.0,
-                "elo": round(float(self.current_elo.get(name, meta["base_elo"])), 1),
-                "form": [m["result"] for m in self.team_history.get(name, [])[-5:]],
+                "elo": round(float(self.current_elo.get(name, meta.get("base_elo", 1750.0))), 1),
+                "form": form_5,
             }
 
         for _, row in sub.iterrows():
@@ -449,49 +463,40 @@ class FeatureStore:
             fthg, ftag = int(row["fthg"]), int(row["ftag"])
             hxg, axg = float(row.get("home_xg", fthg)), float(row.get("away_xg", ftag))
 
-            for team, gf, ga, xg, xga in [
-                (h, fthg, ftag, hxg, axg),
-                (a, ftag, fthg, axg, hxg),
-            ]:
-                if team not in stats:
-                    meta = self.clubs.get(team) or register_dynamic_club(team, league_code)
-                    stats[team] = {
-                        "team": team,
-                        "short_name": meta["short_name"],
-                        "tla": meta["tla"],
-                        "color": meta["primary_color"],
-                        "played": 0,
-                        "won": 0,
-                        "drawn": 0,
-                        "lost": 0,
-                        "gf": 0,
-                        "ga": 0,
-                        "gd": 0,
-                        "points": 0,
-                        "xg": 0.0,
-                        "xga": 0.0,
-                        "elo": round(float(self.current_elo.get(team, meta["base_elo"])), 1),
-                        "form": [m["result"] for m in self.team_history.get(team, [])[-5:]],
-                    }
-                st = stats[team]
-                st["played"] += 1
-                st["gf"] += gf
-                st["ga"] += ga
-                st["gd"] = st["gf"] - st["ga"]
-                st["xg"] = round(st["xg"] + xg, 1)
-                st["xga"] = round(st["xga"] + xga, 1)
-                if gf > ga:
-                    st["won"] += 1
-                    st["points"] += 3
-                elif gf == ga:
-                    st["drawn"] += 1
-                    st["points"] += 1
-                else:
-                    st["lost"] += 1
+            st_h = stats[h]
+            st_a = stats[a]
+
+            st_h["played"] += 1
+            st_h["gf"] += fthg
+            st_h["ga"] += ftag
+            st_h["gd"] = st_h["gf"] - st_h["ga"]
+            st_h["xg"] = round(st_h["xg"] + hxg, 1)
+            st_h["xga"] = round(st_h["xga"] + axg, 1)
+
+            st_a["played"] += 1
+            st_a["gf"] += ftag
+            st_a["ga"] += fthg
+            st_a["gd"] = st_a["gf"] - st_a["ga"]
+            st_a["xg"] = round(st_a["xg"] + axg, 1)
+            st_a["xga"] = round(st_a["xga"] + hxg, 1)
+
+            if fthg > ftag:
+                st_h["won"] += 1
+                st_h["points"] += 3
+                st_a["lost"] += 1
+            elif fthg < ftag:
+                st_a["won"] += 1
+                st_a["points"] += 3
+                st_h["lost"] += 1
+            else:
+                st_h["drawn"] += 1
+                st_h["points"] += 1
+                st_a["drawn"] += 1
+                st_a["points"] += 1
 
         ranked = sorted(
             stats.values(),
-            key=lambda x: (-x["points"], -x["gd"], -x["gf"], -x["elo"]),
+            key=lambda x: (-x["points"], -x["gd"], -x["gf"], -x["elo"], x["team"]),
         )
         for idx, item in enumerate(ranked, start=1):
             item["rank"] = idx

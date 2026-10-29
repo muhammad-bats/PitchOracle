@@ -1,15 +1,15 @@
 """
-Future-Proof Data Loader, Live Multi-Source Sync Engine, and CSV Database Manager
+Future-Proof Data Loader, Live Real-Data Sync Engine, and CSV Database Manager
 covering Premier League, La Liga, Bundesliga, Serie A, Ligue 1, and UEFA Champions League.
 
 Designed to:
 1. Dynamically determine active and historical European seasons based on wall-clock date.
-2. Extract, parse, and normalize newly completed matches from:
+2. Extract, parse, and normalize real completed matches from:
    - football-data.co.uk CSV feeds (E0, SP1, D1, I1, F1)
-   - ESPN Public Soccer Scoreboard API (eng.1, esp.1, ger.1, ita.1, fra.1, uefa.champions)
-   - Scheduled season matchday progression when offline or between live feed updates.
-3. Persist all new and updated match records into `backend/data/historical_matches.csv`.
-4. Auto-discover any newly promoted clubs in future seasons so standings and predictions never break.
+   - UEFA Champions League match records
+3. Persist all records into `backend/data/historical_matches.csv`.
+4. Only update the current active season during sync, preserving all prior chronological seasons.
+5. Auto-discover and register any newly promoted clubs so standings and predictions never break.
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ LEAGUES: Dict[str, Dict[str, Any]] = {
 # Tuple schema:
 # (name, short_name, tla, league, country, stadium, primary_color, secondary_color, base_elo, attack, defense, possession, press, ucl_participant)
 CLUB_DEFINITIONS: List[Tuple[str, str, str, str, str, str, str, str, float, float, float, float, float, bool]] = [
-    # Premier League (20)
+    # Premier League
     ("Manchester City", "Man City", "MCI", "PL", "England", "Etihad Stadium", "#6CABDD", "#1C2C5B", 1985, 93, 89, 0.66, 0.86, True),
     ("Arsenal", "Arsenal", "ARS", "PL", "England", "Emirates Stadium", "#EF0107", "#FFFFFF", 1965, 90, 92, 0.61, 0.88, True),
     ("Liverpool", "Liverpool", "LIV", "PL", "England", "Anfield", "#C8102E", "#00B2A9", 1960, 92, 88, 0.60, 0.90, True),
@@ -133,8 +133,15 @@ CLUB_DEFINITIONS: List[Tuple[str, str, str, str, str, str, str, str, float, floa
     ("Leicester City", "Leicester", "LEI", "PL", "England", "King Power Stadium", "#003090", "#FDBE11", 1705, 72, 70, 0.49, 0.69, False),
     ("Ipswich Town", "Ipswich", "IPS", "PL", "England", "Portman Road", "#3A64A3", "#FFFFFF", 1680, 70, 68, 0.45, 0.72, False),
     ("Southampton", "Southampton", "SOU", "PL", "England", "St Mary's Stadium", "#D71920", "#FFFFFF", 1675, 69, 67, 0.53, 0.70, False),
+    ("Coventry City", "Coventry", "COV", "PL", "England", "Coventry Building Society Arena", "#00B6F1", "#0B2240", 1720, 71, 72, 0.45, 0.72, False),
+    ("Hull City", "Hull", "HUL", "PL", "England", "MKM Stadium", "#F5A800", "#000000", 1725, 72, 73, 0.46, 0.73, False),
+    ("Leeds United", "Leeds", "LEE", "PL", "England", "Elland Road", "#1E3A8A", "#FFCD00", 1785, 78, 77, 0.54, 0.82, False),
+    ("Sunderland", "Sunderland", "SUN", "PL", "England", "Stadium of Light", "#EB172B", "#000000", 1715, 70, 71, 0.44, 0.70, False),
+    ("Sheffield United", "Sheffield Utd", "SHU", "PL", "England", "Bramall Lane", "#EE2737", "#000000", 1680, 69, 68, 0.42, 0.69, False),
+    ("Burnley", "Burnley", "BUR", "PL", "England", "Turf Moor", "#6C1D45", "#99D6EA", 1710, 71, 72, 0.46, 0.74, False),
+    ("Luton Town", "Luton", "LUT", "PL", "England", "Kenilworth Road", "#F78F1E", "#002D62", 1685, 70, 68, 0.43, 0.72, False),
 
-    # La Liga (20)
+    # La Liga
     ("Real Madrid", "Real Madrid", "RMA", "PD", "Spain", "Santiago Bernabéu", "#00529F", "#FEBE10", 1990, 94, 90, 0.61, 0.83, True),
     ("Barcelona", "Barcelona", "BAR", "PD", "Spain", "Estadi Olímpic / Camp Nou", "#A50044", "#004D98", 1955, 93, 86, 0.65, 0.88, True),
     ("Atlético Madrid", "Atlético", "ATM", "PD", "Spain", "Riyadh Air Metropolitano", "#CB3524", "#272E61", 1895, 86, 89, 0.51, 0.81, True),
@@ -155,8 +162,16 @@ CLUB_DEFINITIONS: List[Tuple[str, str, str, str, str, str, str, str, float, floa
     ("Leganés", "Leganés", "LEG", "PD", "Spain", "Butarque", "#0055A4", "#FFFFFF", 1685, 68, 70, 0.42, 0.67, False),
     ("Espanyol", "Espanyol", "ESP", "PD", "Spain", "RCDE Stadium", "#007FC8", "#FFFFFF", 1682, 69, 69, 0.44, 0.68, False),
     ("Real Valladolid", "Valladolid", "VLL", "PD", "Spain", "José Zorrilla", "#5A2A82", "#FFFFFF", 1670, 67, 68, 0.43, 0.67, False),
+    ("Elche CF", "Elche", "ELC", "PD", "Spain", "Martínez Valero", "#006837", "#FFFFFF", 1690, 69, 70, 0.44, 0.69, False),
+    ("Deportivo La Coruña", "La Coruña", "DEP", "PD", "Spain", "Riazor", "#005CAB", "#FFFFFF", 1715, 72, 73, 0.48, 0.73, False),
+    ("Levante UD", "Levante", "LEV", "PD", "Spain", "Ciutat de València", "#003366", "#BA0C2F", 1705, 71, 71, 0.46, 0.71, False),
+    ("Málaga CF", "Málaga", "MCF", "PD", "Spain", "La Rosaleda", "#008CD2", "#FFFFFF", 1700, 70, 71, 0.45, 0.70, False),
+    ("Racing Santander", "Santander", "RAC", "PD", "Spain", "El Sardinero", "#008037", "#000000", 1695, 70, 70, 0.44, 0.69, False),
+    ("Cádiz CF", "Cádiz", "CAD", "PD", "Spain", "Nuevo Mirandilla", "#FFDF00", "#002B49", 1680, 68, 70, 0.41, 0.68, False),
+    ("Granada CF", "Granada", "GRA", "PD", "Spain", "Nuevo Los Cármenes", "#A6192E", "#FFFFFF", 1675, 68, 69, 0.42, 0.68, False),
+    ("UD Almería", "Almería", "ALM", "PD", "Spain", "Power Horse Stadium", "#ED1C24", "#FFFFFF", 1670, 69, 67, 0.43, 0.67, False),
 
-    # Bundesliga (18)
+    # Bundesliga
     ("Bayern Munich", "Bayern", "BAY", "BL1", "Germany", "Allianz Arena", "#DC052D", "#0066B2", 1965, 95, 86, 0.65, 0.89, True),
     ("Bayer Leverkusen", "Leverkusen", "B04", "BL1", "Germany", "BayArena", "#E32221", "#000000", 1935, 90, 87, 0.61, 0.87, True),
     ("Borussia Dortmund", "Dortmund", "BVB", "BL1", "Germany", "Signal Iduna Park", "#D97706", "#000000", 1885, 88, 82, 0.58, 0.84, True),
@@ -170,13 +185,19 @@ CLUB_DEFINITIONS: List[Tuple[str, str, str, str, str, str, str, str, float, floa
     ("Borussia Mönchengladbach", "Gladbach", "BMG", "BL1", "Germany", "Borussia-Park", "#1E293B", "#1E90FF", 1735, 77, 71, 0.49, 0.72, False),
     ("1. FC Heidenheim", "Heidenheim", "HDH", "BL1", "Germany", "Voith-Arena", "#E2001A", "#003D7C", 1730, 74, 73, 0.43, 0.76, False),
     ("FC Augsburg", "Augsburg", "FCA", "BL1", "Germany", "WWK Arena", "#BA3733", "#467148", 1720, 73, 72, 0.44, 0.74, False),
-    ("1. FC Union Berlin", "Union Berlin", "FCU", "BL1", "Germany", "Stadion An der Alten Försterei", "#EB1923", "#F4A900", 1725, 71, 76, 0.42, 0.75, False),
+    ("1. FC Union Berlin", "Union Berlin", "FCU", "BL1", "Germany", "Alte Försterei", "#EB1923", "#F4A900", 1725, 71, 76, 0.42, 0.75, False),
     ("1. FSV Mainz 05", "Mainz 05", "M05", "BL1", "Germany", "Mewa Arena", "#C3141E", "#FFFFFF", 1732, 74, 74, 0.46, 0.79, False),
     ("VfL Bochum", "Bochum", "BOC", "BL1", "Germany", "Vonovia Ruhrstadion", "#005CA9", "#FFFFFF", 1685, 70, 68, 0.44, 0.73, False),
     ("FC St. Pauli", "St. Pauli", "STP", "BL1", "Germany", "Millerntor-Stadion", "#623B2A", "#FFFFFF", 1680, 69, 70, 0.47, 0.74, False),
     ("Holstein Kiel", "Holstein Kiel", "KSV", "BL1", "Germany", "Holstein-Stadion", "#004B93", "#E30613", 1665, 69, 66, 0.44, 0.71, False),
+    ("SV Elversberg", "Elversberg", "SVE", "BL1", "Germany", "Ursapharm-Arena", "#1E293B", "#FFFFFF", 1690, 71, 70, 0.45, 0.72, False),
+    ("1. FC Köln", "Köln", "KOE", "BL1", "Germany", "RheinEnergieStadion", "#ED1C24", "#FFFFFF", 1735, 74, 73, 0.48, 0.76, False),
+    ("Hamburger SV", "Hamburg", "HSV", "BL1", "Germany", "Volksparkstadion", "#0055A5", "#000000", 1740, 75, 73, 0.50, 0.76, False),
+    ("SC Paderborn 07", "Paderborn", "SCP", "BL1", "Germany", "Home Deluxe Arena", "#005CA9", "#000000", 1695, 71, 70, 0.46, 0.72, False),
+    ("FC Schalke 04", "Schalke", "S04", "BL1", "Germany", "Veltins-Arena", "#004D9D", "#FFFFFF", 1730, 74, 72, 0.49, 0.75, False),
+    ("SV Darmstadt 98", "Darmstadt", "D98", "BL1", "Germany", "Merck-Stadion", "#004E9E", "#FFFFFF", 1665, 68, 66, 0.42, 0.70, False),
 
-    # Serie A (20)
+    # Serie A
     ("Inter Milan", "Inter", "INT", "SA", "Italy", "San Siro", "#010E80", "#000000", 1965, 91, 91, 0.59, 0.84, True),
     ("AC Milan", "AC Milan", "MIL", "SA", "Italy", "San Siro", "#FB090B", "#000000", 1875, 86, 82, 0.56, 0.81, True),
     ("Juventus", "Juventus", "JUV", "SA", "Italy", "Allianz Stadium", "#1E293B", "#64748B", 1885, 83, 88, 0.55, 0.79, True),
@@ -197,8 +218,11 @@ CLUB_DEFINITIONS: List[Tuple[str, str, str, str, str, str, str, str, float, floa
     ("Parma", "Parma", "PAR", "SA", "Italy", "Stadio Ennio Tardini", "#003399", "#FFCC00", 1695, 72, 69, 0.45, 0.72, False),
     ("Como", "Como", "COM", "SA", "Italy", "Stadio Giuseppe Sinigaglia", "#0054A6", "#FFFFFF", 1690, 71, 69, 0.51, 0.73, False),
     ("Venezia", "Venezia", "VEN", "SA", "Italy", "Stadio Pier Luigi Penzo", "#EA580C", "#006847", 1670, 68, 67, 0.44, 0.68, False),
+    ("Frosinone", "Frosinone", "FRO", "SA", "Italy", "Stadio Benito Stirpe", "#FED100", "#005CA9", 1685, 70, 69, 0.44, 0.70, False),
+    ("Sassuolo", "Sassuolo", "SAS", "SA", "Italy", "Mapei Stadium", "#00A651", "#000000", 1720, 74, 71, 0.48, 0.73, False),
+    ("Salernitana", "Salernitana", "SAL", "SA", "Italy", "Stadio Arechi", "#8A1E03", "#FFFFFF", 1660, 67, 66, 0.41, 0.67, False),
 
-    # Ligue 1 (18)
+    # Ligue 1
     ("Paris Saint-Germain", "PSG", "PSG", "FL1", "France", "Parc des Princes", "#004170", "#DA291C", 1945, 92, 86, 0.66, 0.87, True),
     ("AS Monaco", "Monaco", "ASM", "FL1", "France", "Stade Louis II", "#E51B24", "#FFFFFF", 1845, 85, 80, 0.55, 0.84, True),
     ("Lille OSC", "Lille", "LIL", "FL1", "France", "Stade Pierre-Mauroy", "#E01E13", "#1A2141", 1835, 81, 83, 0.56, 0.81, True),
@@ -217,8 +241,14 @@ CLUB_DEFINITIONS: List[Tuple[str, str, str, str, str, str, str, str, float, floa
     ("AJ Auxerre", "Auxerre", "AJA", "FL1", "France", "Stade de l'Abbé-Deschamps", "#0055A4", "#FFFFFF", 1685, 70, 69, 0.45, 0.70, False),
     ("Angers SCO", "Angers", "SCO", "FL1", "France", "Stade Raymond Kopa", "#334155", "#FFFFFF", 1670, 67, 68, 0.43, 0.68, False),
     ("AS Saint-Étienne", "Saint-Étienne", "ASSE", "FL1", "France", "Stade Geoffroy-Guichard", "#008A3C", "#FFFFFF", 1680, 69, 69, 0.45, 0.70, False),
+    ("Le Mans FC", "Le Mans", "LEM", "FL1", "France", "Stade Marie-Marvingt", "#D52B1E", "#FFCC00", 1680, 69, 69, 0.44, 0.70, False),
+    ("FC Lorient", "Lorient", "FCL", "FL1", "France", "Stade du Moustoir", "#FF6600", "#000000", 1710, 72, 71, 0.46, 0.72, False),
+    ("Paris FC", "Paris FC", "PFC", "FL1", "France", "Stade Charléty", "#0A2158", "#0284C7", 1715, 73, 72, 0.48, 0.74, False),
+    ("ES Troyes AC", "Troyes", "EST", "FL1", "France", "Stade de l'Aube", "#0055A5", "#FFFFFF", 1685, 69, 69, 0.43, 0.70, False),
+    ("Clermont Foot", "Clermont", "CF63", "FL1", "France", "Stade Gabriel-Montpied", "#A81D33", "#002B49", 1670, 67, 68, 0.42, 0.68, False),
+    ("FC Metz", "Metz", "FCM", "FL1", "France", "Stade Saint-Symphorien", "#800020", "#FFFFFF", 1675, 68, 69, 0.43, 0.69, False),
 
-    # Additional European Giants for UEFA Champions League (CL)
+    # UEFA Champions League European Giants
     ("Sporting CP", "Sporting CP", "SCP", "CL", "Portugal", "Estádio José Alvalade", "#008057", "#FFFFFF", 1865, 86, 82, 0.58, 0.84, True),
     ("Benfica", "Benfica", "SLB", "CL", "Portugal", "Estádio da Luz", "#E83030", "#FFFFFF", 1850, 84, 81, 0.57, 0.82, True),
     ("FC Porto", "FC Porto", "FCP", "CL", "Portugal", "Estádio do Dragão", "#00428C", "#FFFFFF", 1835, 82, 82, 0.55, 0.83, True),
@@ -233,6 +263,7 @@ CLUB_DEFINITIONS: List[Tuple[str, str, str, str, str, str, str, str, float, floa
 
 # Map CSV and live API club name aliases to canonical club names
 CSV_NAME_MAP: Dict[str, str] = {
+    # Premier League
     "Man City": "Manchester City",
     "Manchester City": "Manchester City",
     "Man United": "Manchester United",
@@ -247,6 +278,16 @@ CSV_NAME_MAP: Dict[str, str] = {
     "Wolves": "Wolverhampton Wanderers",
     "Leicester": "Leicester City",
     "Ipswich": "Ipswich Town",
+    "Coventry": "Coventry City",
+    "Hull": "Hull City",
+    "Leeds": "Leeds United",
+    "Sunderland": "Sunderland",
+    "Southampton": "Southampton",
+    "Sheffield United": "Sheffield United",
+    "Sheffield Utd": "Sheffield United",
+    "Burnley": "Burnley",
+    "Luton": "Luton Town",
+    # La Liga
     "Ath Madrid": "Atlético Madrid",
     "Atletico Madrid": "Atlético Madrid",
     "Ath Bilbao": "Athletic Club",
@@ -259,6 +300,16 @@ CSV_NAME_MAP: Dict[str, str] = {
     "Deportivo Alavés": "Alavés",
     "Leganes": "Leganés",
     "Valladolid": "Real Valladolid",
+    "Elche": "Elche CF",
+    "Espanol": "Espanyol",
+    "La Coruna": "Deportivo La Coruña",
+    "Levante": "Levante UD",
+    "Malaga": "Málaga CF",
+    "Santander": "Racing Santander",
+    "Cadiz": "Cádiz CF",
+    "Granada": "Granada CF",
+    "Almeria": "UD Almería",
+    # Bundesliga
     "Bayern Munich": "Bayern Munich",
     "Bayern München": "Bayern Munich",
     "Leverkusen": "Bayer Leverkusen",
@@ -280,11 +331,24 @@ CSV_NAME_MAP: Dict[str, str] = {
     "Bochum": "VfL Bochum",
     "St Pauli": "FC St. Pauli",
     "Holstein Kiel": "Holstein Kiel",
+    "Elversberg": "SV Elversberg",
+    "FC Koln": "1. FC Köln",
+    "Koln": "1. FC Köln",
+    "Hamburg": "Hamburger SV",
+    "Paderborn": "SC Paderborn 07",
+    "Schalke 04": "FC Schalke 04",
+    "Schalke": "FC Schalke 04",
+    "Darmstadt": "SV Darmstadt 98",
+    # Serie A
     "Inter": "Inter Milan",
     "Internazionale": "Inter Milan",
     "Milan": "AC Milan",
     "Roma": "AS Roma",
     "Verona": "Hellas Verona",
+    "Frosinone": "Frosinone",
+    "Sassuolo": "Sassuolo",
+    "Salernitana": "Salernitana",
+    # Ligue 1
     "Paris SG": "Paris Saint-Germain",
     "Paris Saint Germain": "Paris Saint-Germain",
     "Monaco": "AS Monaco",
@@ -306,9 +370,14 @@ CSV_NAME_MAP: Dict[str, str] = {
     "Angers": "Angers SCO",
     "St Etienne": "AS Saint-Étienne",
     "Saint-Etienne": "AS Saint-Étienne",
+    "Le Mans": "Le Mans FC",
+    "Lorient": "FC Lorient",
+    "Paris FC": "Paris FC",
+    "Troyes": "ES Troyes AC",
+    "Clermont": "Clermont Foot",
+    "Metz": "FC Metz",
 }
 
-# Dynamic registry for any promoted or newly discovered clubs in future seasons
 _DYNAMIC_CLUBS_REGISTRY: Dict[str, Dict[str, Any]] = {}
 
 
@@ -321,20 +390,12 @@ def get_current_season_label(now: Optional[datetime] = None) -> str:
     return f"{start_year}/{end_short}"
 
 
-def get_dynamic_season_codes(now: Optional[datetime] = None) -> List[Tuple[str, str]]:
-    """
-    Return the last 3 season codes as (fd_uk_short_code, canonical_season_label)
-    dynamically based on current date so future seasons are automatically queried.
-    """
+def get_current_season_code(now: Optional[datetime] = None) -> str:
+    """Return the 4-digit season code (e.g. '2627') for football-data.co.uk URLs."""
     if now is None:
         now = datetime.now()
-    current_start = now.year if now.month >= 7 else now.year - 1
-    out: List[Tuple[str, str]] = []
-    for y in [current_start - 3, current_start - 2, current_start - 1, current_start]:
-        s_code = f"{str(y)[-2:]}{str(y + 1)[-2:]}"
-        s_label = f"{y}/{str(y + 1)[-2:]}"
-        out.append((s_code, s_label))
-    return out
+    start_year = now.year if now.month >= 7 else now.year - 1
+    return f"{str(start_year)[-2:]}{str(start_year + 1)[-2:]}"
 
 
 def register_dynamic_club(name: str, league_code: str = "PL") -> Dict[str, Any]:
@@ -371,7 +432,7 @@ def register_dynamic_club(name: str, league_code: str = "PL") -> Dict[str, Any]:
 
 
 def get_clubs_dict() -> Dict[str, Dict[str, Any]]:
-    """Return dictionary of all clubs indexed by canonical name (including any dynamically discovered clubs)."""
+    """Return dictionary of all clubs indexed by canonical name."""
     clubs: Dict[str, Dict[str, Any]] = {}
     for (
         name,
@@ -409,141 +470,50 @@ def get_clubs_dict() -> Dict[str, Dict[str, Any]]:
     return clubs
 
 
-def get_league_clubs(league_code: str) -> List[Dict[str, Any]]:
-    """Return all clubs participating in the specified competition."""
+def get_league_clubs(league_code: str, season: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Return all active clubs participating in the specified competition for the specified season.
+    Dynamically extracts the clubs from matches played in that season so promoted/relegated clubs
+    accurately reflect real-world divisions.
+    """
     clubs = get_clubs_dict()
+    if season is None:
+        season = get_current_season_label()
+
     if league_code == "CL":
         res = [c for c in clubs.values() if c["ucl_participant"]]
-    else:
-        res = [c for c in clubs.values() if c["league"] == league_code]
+        return sorted(res, key=lambda x: -x["base_elo"])
+
+    # If historical matches CSV exists, extract actual clubs that played in this league this season
+    if HISTORICAL_CSV_PATH.exists():
+        try:
+            df = pd.read_csv(HISTORICAL_CSV_PATH)
+            sub = df[(df["league"] == league_code) & (df["season"] == season)]
+            if not sub.empty:
+                active_names = set(sub["home_team"].unique()) | set(sub["away_team"].unique())
+                active_clubs = []
+                for name in active_names:
+                    if name in clubs:
+                        active_clubs.append(clubs[name])
+                    else:
+                        active_clubs.append(register_dynamic_club(name, league_code))
+                return sorted(active_clubs, key=lambda x: -x["base_elo"])
+        except Exception:
+            pass
+
+    # Fallback to static definitions matching this league
+    res = [c for c in clubs.values() if c["league"] == league_code]
     return sorted(res, key=lambda x: -x["base_elo"])
-
-
-def _simulate_single_match_record(
-    rng: np.random.Generator,
-    date_str: str,
-    season: str,
-    league_code: str,
-    home_club: Dict[str, Any],
-    away_club: Dict[str, Any],
-    matchday: int,
-) -> Dict[str, Any]:
-    """Generate a realistic match record calibrated to club Elo, attack/defense, and league scoring rates."""
-    league_meta = LEAGUES[league_code]
-    base_rate = league_meta["avg_goals"] / 2.0
-    home_adv = league_meta["home_advantage"]
-
-    elo_diff = (home_club["base_elo"] + 55.0 - away_club["base_elo"]) / 400.0
-    att_def_home = (home_club["attack"] / max(away_club["defense"], 50.0)) ** 1.15
-    att_def_away = (away_club["attack"] / max(home_club["defense"], 50.0)) ** 1.15
-
-    lam_home = np.clip(base_rate * att_def_home * (1.0 + home_adv * 0.5) * (10 ** (elo_diff * 0.28)), 0.35, 3.85)
-    lam_away = np.clip(base_rate * att_def_away * (1.0 - home_adv * 0.25) * (10 ** (-elo_diff * 0.28)), 0.25, 3.35)
-
-    lam_home *= rng.uniform(0.86, 1.15)
-    lam_away *= rng.uniform(0.86, 1.15)
-
-    fthg = int(rng.poisson(lam_home))
-    ftag = int(rng.poisson(lam_away))
-    if fthg > ftag:
-        ftr = "H"
-    elif fthg < ftag:
-        ftr = "A"
-    else:
-        ftr = "D"
-
-    hthg = int(rng.binomial(fthg, 0.44)) if fthg > 0 else 0
-    htag = int(rng.binomial(ftag, 0.42)) if ftag > 0 else 0
-
-    poss_logit = (home_club["possession_style"] - away_club["possession_style"]) * 2.2 + 0.08
-    home_poss = float(np.clip(50.0 + poss_logit * 38.0 + rng.normal(0, 3.2), 28.0, 74.0))
-    away_poss = round(100.0 - home_poss, 1)
-    home_poss = round(home_poss, 1)
-
-    hs = int(max(fthg + 2, round(lam_home * 7.8 + (home_poss - 50.0) * 0.14 + rng.normal(0, 2.5))))
-    as_ = int(max(ftag + 2, round(lam_away * 7.4 + (away_poss - 50.0) * 0.14 + rng.normal(0, 2.5))))
-    hst = int(np.clip(fthg + rng.integers(1, 5), fthg, hs))
-    ast = int(np.clip(ftag + rng.integers(1, 5), ftag, as_))
-
-    hc = int(max(1, round(hs * 0.38 + rng.normal(0, 1.8))))
-    ac = int(max(1, round(as_ * 0.36 + rng.normal(0, 1.8))))
-
-    hf = int(np.clip(round(11.5 - (home_poss - 50.0) * 0.08 + rng.normal(0, 2.4)), 4, 22))
-    af = int(np.clip(round(12.0 - (away_poss - 50.0) * 0.08 + rng.normal(0, 2.4)), 4, 23))
-
-    hy = int(np.clip(rng.poisson(max(0.8, hf * 0.16)), 0, 6))
-    ay = int(np.clip(rng.poisson(max(0.9, af * 0.17)), 0, 6))
-    hr = int(1 if rng.random() < 0.045 else 0)
-    ar = int(1 if rng.random() < 0.052 else 0)
-
-    home_xg = round(float(lam_home * 0.65 + hst * 0.11 + (hs - hst) * 0.03), 2)
-    away_xg = round(float(lam_away * 0.65 + ast * 0.11 + (as_ - ast) * 0.03), 2)
-
-    return {
-        "date": date_str,
-        "season": season,
-        "league": league_code,
-        "matchday": matchday,
-        "home_team": home_club["name"],
-        "away_team": away_club["name"],
-        "fthg": fthg,
-        "ftag": ftag,
-        "ftr": ftr,
-        "hthg": hthg,
-        "htag": htag,
-        "home_xg": home_xg,
-        "away_xg": away_xg,
-        "home_possession": home_poss,
-        "away_possession": away_poss,
-        "hs": hs,
-        "as": as_,
-        "hst": hst,
-        "ast": ast,
-        "hc": hc,
-        "ac": ac,
-        "hf": hf,
-        "af": af,
-        "hy": hy,
-        "ay": ay,
-        "hr": hr,
-        "ar": ar,
-    }
-
-
-def _generate_round_robin_schedule(
-    clubs: List[Dict[str, Any]], seed: int = 42
-) -> List[List[Tuple[Dict[str, Any], Dict[str, Any]]]]:
-    """Create a deterministic balanced double round-robin fixture list using circle method."""
-    rng = np.random.default_rng(seed)
-    teams = list(clubs)
-    rng.shuffle(teams)
-    n = len(teams)
-    rounds: List[List[Tuple[Dict[str, Any], Dict[str, Any]]]] = []
-    for r in range(n - 1):
-        matchday_pairs = []
-        for i in range(n // 2):
-            t1 = teams[i]
-            t2 = teams[n - 1 - i]
-            if r % 2 == 0:
-                matchday_pairs.append((t1, t2))
-            else:
-                matchday_pairs.append((t2, t1))
-        rounds.append(matchday_pairs)
-        teams = [teams[0]] + [teams[-1]] + teams[1:-1]
-
-    second_half = [[(away, home) for (home, away) in md] for md in rounds]
-    return rounds + second_half
 
 
 def generate_multi_season_dataset(force: bool = False) -> pd.DataFrame:
     """
-    Build or load the multi-season historical CSV database (`backend/data/historical_matches.csv`)
+    Load or build the multi-season historical CSV database (`backend/data/historical_matches.csv`)
     covering PL, PD, BL1, SA, FL1, and CL.
     """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if HISTORICAL_CSV_PATH.exists() and not force:
         df = pd.read_csv(HISTORICAL_CSV_PATH)
-        # Register any dynamically added clubs present in the CSV
         known = get_clubs_dict()
         for col in ("home_team", "away_team"):
             for name, lg in zip(df[col], df["league"]):
@@ -551,341 +521,147 @@ def generate_multi_season_dataset(force: bool = False) -> pd.DataFrame:
                     register_dynamic_club(str(name), str(lg))
         return df
 
-    rng = np.random.default_rng(42)
-    records: List[Dict[str, Any]] = []
+    from backend.build_real_dataset import download_real_matches
+    return download_real_matches()
 
-    current_season = get_current_season_label()
-    start_yr = int(current_season.split("/")[0])
 
-    seasons_config = [
-        (f"{start_yr - 2}/{str(start_yr - 1)[-2:]}", datetime(start_yr - 2, 8, 16), None),
-        (f"{start_yr - 1}/{str(start_yr)[-2:]}", datetime(start_yr - 1, 8, 15), None),
-        (current_season, datetime(start_yr, 8, 14), 10),
+def sync_live_football_data_uk(seasons: Optional[List[str]] = None) -> Dict[str, Any]:
+    """
+    Extract, parse, and persist updated match data for the CURRENT active season
+    from football-data.co.uk into `backend/data/historical_matches.csv`.
+    Only data from the current season is updated, preserving all past chronological seasons.
+    """
+    active_season_label = get_current_season_label()
+    active_season_code = get_current_season_code()
+
+    clubs_dict = get_clubs_dict()
+    synced_sources: List[str] = []
+    current_season_matches: List[Dict[str, Any]] = []
+
+    league_files = [
+        ("E0", "PL"),
+        ("SP1", "PD"),
+        ("D1", "BL1"),
+        ("I1", "SA"),
+        ("F1", "FL1"),
     ]
 
-    for s_idx, (season_label, start_dt, max_md) in enumerate(seasons_config):
-        for league_code in ["PL", "PD", "BL1", "SA", "FL1"]:
-            league_clubs = get_league_clubs(league_code)
-            schedule = _generate_round_robin_schedule(league_clubs, seed=100 + s_idx * 10 + ord(league_code[0]))
-            limit = max_md if max_md is not None else len(schedule)
-            for md_idx, pairs in enumerate(schedule[:limit], start=1):
-                md_date = start_dt + timedelta(days=(md_idx - 1) * 7)
-                for p_idx, (home_c, away_c) in enumerate(pairs):
-                    kickoff_date = (md_date + timedelta(days=int(p_idx % 3))).strftime("%Y-%m-%d")
-                    records.append(
-                        _simulate_single_match_record(
-                            rng, kickoff_date, season_label, league_code, home_c, away_c, md_idx
-                        )
-                    )
-
-        ucl_clubs = get_league_clubs("CL")
-        ucl_mds = 4 if max_md is not None else 12
-        for md_idx in range(1, ucl_mds + 1):
-            shuffled = list(ucl_clubs)
-            rng.shuffle(shuffled)
-            md_date = start_dt + timedelta(days=md_idx * 18)
-            for i in range(0, len(shuffled) - 1, 2):
-                home_c = shuffled[i]
-                away_c = shuffled[i + 1]
-                kickoff_date = (md_date + timedelta(days=int((i // 2) % 2))).strftime("%Y-%m-%d")
-                records.append(
-                    _simulate_single_match_record(
-                        rng, kickoff_date, season_label, "CL", home_c, away_c, md_idx
-                    )
-                )
-
-    df = pd.DataFrame(records)
-    df = df.sort_values(["date", "league"]).reset_index(drop=True)
-    df.to_csv(HISTORICAL_CSV_PATH, index=False)
-    return df
-
-
-def _fetch_espn_completed_matches() -> List[Dict[str, Any]]:
-    """
-    Query ESPN's public scoreboard endpoints for all 6 competitions (PL, PD, BL1, SA, FL1, CL)
-    and extract any completed matches.
-    """
-    extracted: List[Dict[str, Any]] = []
-    clubs_dict = get_clubs_dict()
-    current_season = get_current_season_label()
-
-    for lg_code, lg_meta in LEAGUES.items():
-        slug = lg_meta.get("espn_slug")
-        if not slug:
-            continue
-        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/scoreboard"
+    for fd_code, lg_code in league_files:
+        url = f"https://www.football-data.co.uk/mmz4281/{active_season_code}/{fd_code}.csv"
         try:
-            resp = requests.get(url, timeout=4)
-            if resp.status_code != 200:
+            resp = requests.get(url, timeout=7)
+            if resp.status_code != 200 or len(resp.text) < 200:
                 continue
-            payload = resp.json()
-            events = payload.get("events", [])
-            for ev in events:
-                comps = ev.get("competitions", [])
-                if not comps:
+            raw_df = pd.read_csv(io.StringIO(resp.text))
+            count_lg = 0
+            for _, row in raw_df.iterrows():
+                raw_home = str(row.get("HomeTeam", "")).strip()
+                raw_away = str(row.get("AwayTeam", "")).strip()
+                if not raw_home or not raw_away or raw_home == "nan" or raw_away == "nan":
                     continue
-                comp = comps[0]
-                status_completed = comp.get("status", {}).get("type", {}).get("completed", False)
-                if not status_completed:
+                if pd.isna(row.get("FTHG")) or pd.isna(row.get("FTAG")):
                     continue
-                competitors = comp.get("competitors", [])
-                if len(competitors) != 2:
-                    continue
-                home_comp = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
-                away_comp = next((c for c in competitors if c.get("homeAway") == "away"), competitors[1])
 
-                raw_h = home_comp.get("team", {}).get("displayName", "").strip()
-                raw_a = away_comp.get("team", {}).get("displayName", "").strip()
-                h_name = CSV_NAME_MAP.get(raw_h, raw_h)
-                a_name = CSV_NAME_MAP.get(raw_a, raw_a)
-                if not h_name or not a_name:
-                    continue
-                if h_name not in clubs_dict:
-                    clubs_dict[h_name] = register_dynamic_club(h_name, lg_code)
-                if a_name not in clubs_dict:
-                    clubs_dict[a_name] = register_dynamic_club(a_name, lg_code)
+                home_name = CSV_NAME_MAP.get(raw_home, raw_home)
+                away_name = CSV_NAME_MAP.get(raw_away, raw_away)
 
-                fthg = int(float(home_comp.get("score", 0)))
-                ftag = int(float(away_comp.get("score", 0)))
-                ftr = "H" if fthg > ftag else ("A" if fthg < ftag else "D")
-                ev_date = str(ev.get("date", datetime.now().strftime("%Y-%m-%d")))[:10]
+                if home_name not in clubs_dict:
+                    clubs_dict[home_name] = register_dynamic_club(home_name, lg_code)
+                if away_name not in clubs_dict:
+                    clubs_dict[away_name] = register_dynamic_club(away_name, lg_code)
 
-                extracted.append(
+                fthg = int(row["FTHG"])
+                ftag = int(row["FTAG"])
+                ftr = str(row.get("FTR", "D" if fthg == ftag else ("H" if fthg > ftag else "A"))).strip()
+
+                raw_date = str(row.get("Date", ""))
+                try:
+                    parsed_dt = pd.to_datetime(raw_date, dayfirst=True).strftime("%Y-%m-%d")
+                except Exception:
+                    parsed_dt = datetime.now().strftime("%Y-%m-%d")
+
+                hs = int(row["HS"]) if not pd.isna(row.get("HS")) else max(fthg + 3, 12)
+                as_ = int(row["AS"]) if not pd.isna(row.get("AS")) else max(ftag + 3, 10)
+                hst = int(row["HST"]) if not pd.isna(row.get("HST")) else max(fthg, int(hs * 0.36))
+                ast = int(row["AST"]) if not pd.isna(row.get("AST")) else max(ftag, int(as_ * 0.35))
+
+                hthg = int(row["HTHG"]) if not pd.isna(row.get("HTHG")) else int(fthg * 0.45)
+                htag = int(row["HTAG"]) if not pd.isna(row.get("HTAG")) else int(ftag * 0.45)
+
+                hc = int(row["HC"]) if not pd.isna(row.get("HC")) else 5
+                ac = int(row["AC"]) if not pd.isna(row.get("AC")) else 4
+                hf = int(row["HF"]) if not pd.isna(row.get("HF")) else 11
+                af = int(row["AF"]) if not pd.isna(row.get("AF")) else 12
+                hy = int(row["HY"]) if not pd.isna(row.get("HY")) else 2
+                ay = int(row["AY"]) if not pd.isna(row.get("AY")) else 2
+                hr = int(row["HR"]) if not pd.isna(row.get("HR")) else 0
+                ar = int(row["AR"]) if not pd.isna(row.get("AR")) else 0
+
+                h_xg = round(hst * 0.28 + (hs - hst) * 0.05 + fthg * 0.25, 2)
+                a_xg = round(ast * 0.28 + (as_ - ast) * 0.05 + ftag * 0.25, 2)
+
+                current_season_matches.append(
                     {
-                        "date": ev_date,
-                        "season": current_season,
+                        "date": parsed_dt,
+                        "season": active_season_label,
                         "league": lg_code,
                         "matchday": 1,
-                        "home_team": h_name,
-                        "away_team": a_name,
+                        "home_team": home_name,
+                        "away_team": away_name,
                         "fthg": fthg,
                         "ftag": ftag,
                         "ftr": ftr,
-                        "hthg": max(0, int(round(fthg * 0.45))),
-                        "htag": max(0, int(round(ftag * 0.45))),
-                        "home_xg": round(max(0.4, fthg * 0.85 + 0.35), 2),
-                        "away_xg": round(max(0.3, ftag * 0.85 + 0.30), 2),
+                        "hthg": hthg,
+                        "htag": htag,
+                        "home_xg": h_xg,
+                        "away_xg": a_xg,
                         "home_possession": 52.0,
                         "away_possession": 48.0,
-                        "hs": max(fthg + 4, fthg * 5 + 6),
-                        "as": max(ftag + 4, ftag * 5 + 5),
-                        "hst": max(fthg, fthg * 2 + 2),
-                        "ast": max(ftag, ftag * 2 + 2),
-                        "hc": 5,
-                        "ac": 4,
-                        "hf": 11,
-                        "af": 12,
-                        "hy": 2,
-                        "ay": 2,
-                        "hr": 0,
-                        "ar": 0,
+                        "hs": hs,
+                        "as": as_,
+                        "hst": hst,
+                        "ast": ast,
+                        "hc": hc,
+                        "ac": ac,
+                        "hf": hf,
+                        "af": af,
+                        "hy": hy,
+                        "ay": ay,
+                        "hr": hr,
+                        "ar": ar,
                     }
                 )
-        except Exception:
+                count_lg += 1
+            synced_sources.append(f"{lg_code}-{active_season_code} ({count_lg} games)")
+        except Exception as e:
+            print(f"Sync warning for {lg_code}: {e}")
             continue
-    return extracted
 
-
-def _advance_next_scheduled_matchday(base_df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """
-    Progressively complete and record the next unplayed matchday across all 6 competitions
-    into the CSV database as time proceeds or when Sync Data is triggered.
-    Ensures the CSV DB, standings, form, and Elo ratings continuously advance forward.
-    """
-    current_season = get_current_season_label()
-    start_yr = int(current_season.split("/")[0])
-    clubs_dict = get_clubs_dict()
-    new_matches: List[Dict[str, Any]] = []
-
-    seed_val = int(datetime.now().timestamp() * 1000) % (2**31 - 1)
-    rng = np.random.default_rng(seed_val)
-
-    for league_code in ["PL", "PD", "BL1", "SA", "FL1"]:
-        sub = base_df[(base_df["league"] == league_code) & (base_df["season"] == current_season)]
-        current_max_md = int(sub["matchday"].max()) if not sub.empty else 0
-
-        league_clubs = get_league_clubs(league_code)
-        schedule = _generate_round_robin_schedule(league_clubs, seed=100 + 2 * 10 + ord(league_code[0]))
-
-        next_md = current_max_md + 1
-        if next_md <= len(schedule):
-            pairs = schedule[next_md - 1]
-            md_date = datetime.now().strftime("%Y-%m-%d")
-            for home_c, away_c in pairs:
-                # Avoid duplicate if already played on same matchday
-                already = sub[
-                    (sub["matchday"] == next_md)
-                    & (sub["home_team"] == home_c["name"])
-                    & (sub["away_team"] == away_c["name"])
-                ]
-                if not already.empty:
-                    continue
-                new_matches.append(
-                    _simulate_single_match_record(
-                        rng, md_date, current_season, league_code, home_c, away_c, next_md
-                    )
-                )
-
-    # Also advance UEFA Champions League by 1 round if < 12 matchdays
-    ucl_sub = base_df[(base_df["league"] == "CL") & (base_df["season"] == current_season)]
-    ucl_max_md = int(ucl_sub["matchday"].max()) if not ucl_sub.empty else 0
-    if ucl_max_md < 12:
-        next_ucl_md = ucl_max_md + 1
-        ucl_clubs = list(get_league_clubs("CL"))
-        ucl_rng = np.random.default_rng(start_yr * 100 + next_ucl_md)
-        ucl_rng.shuffle(ucl_clubs)
-        md_date = datetime.now().strftime("%Y-%m-%d")
-        for i in range(0, len(ucl_clubs) - 1, 2):
-            new_matches.append(
-                _simulate_single_match_record(
-                    rng, md_date, current_season, "CL", ucl_clubs[i], ucl_clubs[i + 1], next_ucl_md
-                )
-            )
-
-    return new_matches
-
-
-def sync_live_football_data_uk(
-    seasons: Optional[List[str]] = None, advance_season_progress: bool = True
-) -> Dict[str, Any]:
-    """
-    Extract, parse, and persist newly completed match data into `backend/data/historical_matches.csv`
-    from:
-    1. Live `football-data.co.uk` multi-season CSV feeds (dynamically computed season codes)
-    2. Live ESPN public soccer scoreboard feeds (including UEFA Champions League)
-    3. Active season matchday progression (`advance_season_progress=True`)
-
-    Deduplicates and saves directly to `backend/data/historical_matches.csv`.
-    """
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    dynamic_pairs = get_dynamic_season_codes()
-    if seasons is None:
-        seasons_to_query = dynamic_pairs
+    # Load existing CSV database and preserve all historical seasons (2023/24, 2024/25, 2025/26) and UCL
+    if HISTORICAL_CSV_PATH.exists():
+        existing_df = pd.read_csv(HISTORICAL_CSV_PATH)
+        historical_df = existing_df[existing_df["season"] != active_season_label]
+        # Keep existing CL matches from the current season if any
+        current_cl = existing_df[(existing_df["season"] == active_season_label) & (existing_df["league"] == "CL")]
     else:
-        seasons_to_query = [(s, f"20{s[:2]}/{s[2:]}") for s in seasons]
+        historical_df = pd.DataFrame()
+        current_cl = pd.DataFrame()
 
-    clubs_dict = get_clubs_dict()
-    downloaded_rows = 0
-    synced_sources: List[str] = []
-
-    base_df = generate_multi_season_dataset(force=False)
-    new_records: List[Dict[str, Any]] = []
-
-    # 1. Extract from football-data.co.uk CSVs (cache completed historical seasons; always fetch active season live)
-    active_season_label = get_current_season_label()
-    existing_seasons = set(base_df["season"].unique()) if "season" in base_df.columns else set()
-
-    for lg_code, lg_meta in LEAGUES.items():
-        fd_code = lg_meta.get("fd_uk_code")
-        if not fd_code:
-            continue
-        for s_code, s_label in seasons_to_query:
-            cache_file = CACHE_DIR / f"{fd_code}_{s_code}.csv"
-            # Skip re-downloading past completed seasons if already persisted in historical_matches.csv and cached
-            if s_label != active_season_label and s_label in existing_seasons and cache_file.exists():
-                continue
-
-            url = f"https://www.football-data.co.uk/mmz4281/{s_code}/{fd_code}.csv"
-            try:
-                resp = requests.get(url, timeout=3.5)
-                if resp.status_code != 200 or len(resp.text) < 200:
-                    continue
-                if s_label != active_season_label:
-                    cache_file.write_text(resp.text, encoding="utf-8")
-                raw_df = pd.read_csv(io.StringIO(resp.text))
-                for _, row in raw_df.iterrows():
-                    raw_home = str(row.get("HomeTeam", "")).strip()
-                    raw_away = str(row.get("AwayTeam", "")).strip()
-                    if not raw_home or not raw_away or raw_home == "nan" or raw_away == "nan":
-                        continue
-                    home_name = CSV_NAME_MAP.get(raw_home, raw_home)
-                    away_name = CSV_NAME_MAP.get(raw_away, raw_away)
-
-                    # Future-proof: auto-register any promoted or new club
-                    if home_name not in clubs_dict:
-                        clubs_dict[home_name] = register_dynamic_club(home_name, lg_code)
-                    if away_name not in clubs_dict:
-                        clubs_dict[away_name] = register_dynamic_club(away_name, lg_code)
-
-                    if pd.isna(row.get("FTHG")) or pd.isna(row.get("FTAG")):
-                        continue
-
-                    fthg = int(row["FTHG"])
-                    ftag = int(row["FTAG"])
-                    ftr = str(row.get("FTR", "D" if fthg == ftag else ("H" if fthg > ftag else "A")))
-                    hs = int(row["HS"]) if not pd.isna(row.get("HS")) else fthg + 9
-                    as_ = int(row["AS"]) if not pd.isna(row.get("AS")) else ftag + 8
-                    hst = int(row["HST"]) if not pd.isna(row.get("HST")) else max(fthg, int(hs * 0.36))
-                    ast = int(row["AST"]) if not pd.isna(row.get("AST")) else max(ftag, int(as_ * 0.35))
-
-                    raw_date = str(row.get("Date", "01/01/2025"))
-                    try:
-                        parsed_dt = pd.to_datetime(raw_date, dayfirst=True).strftime("%Y-%m-%d")
-                    except Exception:
-                        parsed_dt = datetime.now().strftime("%Y-%m-%d")
-
-                    new_records.append(
-                        {
-                            "date": parsed_dt,
-                            "season": s_label,
-                            "league": lg_code,
-                            "matchday": 1,
-                            "home_team": home_name,
-                            "away_team": away_name,
-                            "fthg": fthg,
-                            "ftag": ftag,
-                            "ftr": ftr,
-                            "hthg": int(row["HTHG"]) if not pd.isna(row.get("HTHG")) else 0,
-                            "htag": int(row["HTAG"]) if not pd.isna(row.get("HTAG")) else 0,
-                            "home_xg": round(hst * 0.29 + (hs - hst) * 0.06, 2),
-                            "away_xg": round(ast * 0.29 + (as_ - ast) * 0.06, 2),
-                            "home_possession": 52.0,
-                            "away_possession": 48.0,
-                            "hs": hs,
-                            "as": as_,
-                            "hst": hst,
-                            "ast": ast,
-                            "hc": int(row["HC"]) if not pd.isna(row.get("HC")) else 5,
-                            "ac": int(row["AC"]) if not pd.isna(row.get("AC")) else 4,
-                            "hf": int(row["HF"]) if not pd.isna(row.get("HF")) else 11,
-                            "af": int(row["AF"]) if not pd.isna(row.get("AF")) else 12,
-                            "hy": int(row["HY"]) if not pd.isna(row.get("HY")) else 2,
-                            "ay": int(row["AY"]) if not pd.isna(row.get("AY")) else 2,
-                            "hr": int(row["HR"]) if not pd.isna(row.get("HR")) else 0,
-                            "ar": int(row["AR"]) if not pd.isna(row.get("AR")) else 0,
-                        }
-                    )
-                    downloaded_rows += 1
-                synced_sources.append(f"{lg_code}-{s_code}")
-            except Exception:
-                continue
-
-    # 2. Extract from ESPN Public Scoreboard API (covers domestic + Champions League)
-    espn_matches = _fetch_espn_completed_matches()
-    if espn_matches:
-        new_records.extend(espn_matches)
-        downloaded_rows += len(espn_matches)
-        synced_sources.append("espn-live-scoreboard")
-
-    # 3. Advance active season completed matchdays so new completed games are persisted in the CSV DB
-    if advance_season_progress:
-        progressed = _advance_next_scheduled_matchday(base_df)
-        if progressed:
-            new_records.extend(progressed)
-            downloaded_rows += len(progressed)
-            synced_sources.append("season-matchday-progression")
-
-    if new_records:
-        ext_df = pd.DataFrame(new_records)
-        merged = pd.concat([base_df, ext_df], ignore_index=True)
+    if current_season_matches:
+        new_active_df = pd.DataFrame(current_season_matches)
+        all_dfs = [historical_df, new_active_df]
+        if not current_cl.empty:
+            all_dfs.append(current_cl)
+        merged = pd.concat(all_dfs, ignore_index=True)
         merged = merged.drop_duplicates(
             subset=["season", "league", "home_team", "away_team", "date"], keep="last"
         )
-        merged = merged.sort_values(["date", "league", "matchday"]).reset_index(drop=True)
+        merged = merged.sort_values(["date", "league"]).reset_index(drop=True)
         merged.to_csv(HISTORICAL_CSV_PATH, index=False)
         return {
             "status": "synced",
-            "newly_processed_rows": downloaded_rows,
+            "active_season": active_season_label,
+            "newly_processed_rows": len(new_active_df),
             "total_matches_in_csv": len(merged),
             "synced_sources": synced_sources,
             "last_synced_at": datetime.now().isoformat(timespec="seconds"),
@@ -893,8 +669,9 @@ def sync_live_football_data_uk(
 
     return {
         "status": "up_to_date",
+        "active_season": active_season_label,
         "newly_processed_rows": 0,
-        "total_matches_in_csv": len(base_df),
+        "total_matches_in_csv": len(historical_df),
         "synced_sources": synced_sources,
         "last_synced_at": datetime.now().isoformat(timespec="seconds"),
     }
@@ -902,12 +679,11 @@ def sync_live_football_data_uk(
 
 def get_upcoming_fixtures(league_code: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Dynamically generate the next upcoming matchday fixtures for each competition
-    based on the latest completed matchday in `historical_matches.csv`.
+    Dynamically generate upcoming matchday fixtures for each competition
+    using active season clubs and scheduling next matchday clashes.
     """
     df = generate_multi_season_dataset(force=False)
     current_season = get_current_season_label()
-    clubs = get_clubs_dict()
     base_date = datetime.now()
 
     results: List[Dict[str, Any]] = []
@@ -920,23 +696,33 @@ def get_upcoming_fixtures(league_code: Optional[str] = None) -> List[Dict[str, A
     )
 
     for lg in target_leagues:
+        active_clubs = get_league_clubs(lg, season=current_season)
         sub = df[(df["league"] == lg) & (df["season"] == current_season)]
-        current_max_md = int(sub["matchday"].max()) if not sub.empty else 10
-        next_md = current_max_md + 1
+
+        # Determine next matchday based on completed games
+        if not sub.empty:
+            matches_per_team = len(sub) * 2 / max(1, len(active_clubs))
+            next_md = int(round(matches_per_team)) + 1
+        else:
+            next_md = 9
 
         if lg != "CL":
-            league_clubs = get_league_clubs(lg)
-            schedule = _generate_round_robin_schedule(league_clubs, seed=100 + 2 * 10 + ord(lg[0]))
-            md_idx = ((next_md - 1) % len(schedule))
-            pairs = schedule[md_idx]
-            # Sort pairs by combined base_elo descending so marquee clashes appear first
-            sorted_pairs = sorted(
-                pairs,
-                key=lambda pair: -(pair[0]["base_elo"] + pair[1]["base_elo"]),
-            )[:6]
+            n_teams = len(active_clubs)
+            top_half = active_clubs[: n_teams // 2]
+            bottom_half = active_clubs[n_teams // 2 :]
+            pairs = []
+            for i in range(min(len(top_half), len(bottom_half))):
+                if i % 2 == 0:
+                    pairs.append((top_half[i], bottom_half[i]))
+                else:
+                    pairs.append((bottom_half[i], top_half[i]))
 
-            for p_idx, (h_club, a_club) in enumerate(sorted_pairs):
-                f_date = (base_date + timedelta(days=1 + (p_idx % 3))).strftime("%Y-%m-%d")
+            if len(top_half) >= 4:
+                pairs[0] = (top_half[0], top_half[1])
+                pairs[1] = (top_half[2], top_half[3])
+
+            for p_idx, (h_club, a_club) in enumerate(pairs[:6]):
+                f_date = (base_date + timedelta(days=2 + (p_idx % 3))).strftime("%Y-%m-%d")
                 results.append(
                     {
                         "id": f"fix-{fix_counter}",
@@ -961,19 +747,20 @@ def get_upcoming_fixtures(league_code: Optional[str] = None) -> List[Dict[str, A
                 )
                 fix_counter += 1
         else:
-            ucl_clubs = list(get_league_clubs("CL"))
-            ucl_rng = np.random.default_rng(2026 * 100 + next_md)
-            ucl_rng.shuffle(ucl_clubs)
-            ucl_pairs = [(ucl_clubs[i], ucl_clubs[i + 1]) for i in range(0, min(16, len(ucl_clubs) - 1), 2)]
-            for p_idx, (h_club, a_club) in enumerate(ucl_pairs):
-                f_date = (base_date + timedelta(days=2 + (p_idx % 2))).strftime("%Y-%m-%d")
+            ucl_clubs = list(active_clubs)
+            pairs = []
+            for i in range(0, min(12, len(ucl_clubs) - 1), 2):
+                pairs.append((ucl_clubs[i], ucl_clubs[i + 1]))
+
+            for p_idx, (h_club, a_club) in enumerate(pairs):
+                f_date = (base_date + timedelta(days=3 + (p_idx % 2))).strftime("%Y-%m-%d")
                 results.append(
                     {
                         "id": f"fix-{fix_counter}",
                         "league": "CL",
                         "league_name": LEAGUES["CL"]["name"],
                         "league_flag": LEAGUES["CL"]["flag"],
-                        "stage": f"UCL Matchday {next_md}",
+                        "stage": f"UCL League Phase — MD {next_md}",
                         "date": f_date,
                         "kickoff": "20:00 UTC",
                         "stadium": h_club["stadium"],

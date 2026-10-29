@@ -188,7 +188,7 @@ def get_model_metrics() -> Dict[str, Any]:
 def sync_data_and_retrain(
     league: Optional[str] = Query("PL", description="Active competition code for updated standings")
 ) -> Dict[str, Any]:
-    sync_res = sync_live_football_data_uk(advance_season_progress=True)
+    sync_res = sync_live_football_data_uk()
     predictor_engine.last_sync_summary = sync_res
     metrics = predictor_engine.reload_data_and_retrain(force_regenerate=False)
     target_lg = league if (league and league != "ALL" and league in LEAGUES) else "PL"

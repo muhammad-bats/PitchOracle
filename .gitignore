@@ -11,3 +11,5 @@ backend/data/cache/*.csv
 node_modules/
 .next/
 dist/
+.agents/
+

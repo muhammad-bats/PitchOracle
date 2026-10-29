@@ -44,7 +44,12 @@ except Exception:
     XGBClassifier = None  # type: ignore
     HAS_XGBOOST = False
 
-from backend.data_loader import LEAGUES, generate_multi_season_dataset, get_clubs_dict
+from backend.data_loader import (
+    LEAGUES,
+    generate_multi_season_dataset,
+    get_clubs_dict,
+    sync_live_football_data_uk,
+)
 from backend.ml.features import FEATURE_COLUMNS, FEATURE_LABELS, FeatureStore
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
@@ -66,8 +71,11 @@ def _dixon_coles_tau(x: int, y: int, lam_x: float, lam_y: float, rho: float = -0
 class MatchPredictorEngine:
     """End-to-end training, evaluation, and inference engine for football match forecasting."""
 
-    def __init__(self) -> None:
+    def __init__(self, auto_sync_on_boot: bool = True) -> None:
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        self.last_sync_summary: Dict[str, Any] = {}
+        if auto_sync_on_boot:
+            self.last_sync_summary = sync_live_football_data_uk()
         self.df = generate_multi_season_dataset(force=False)
         self.feature_store = FeatureStore(self.df)
         self.xgb_model: Optional[XGBClassifier] = None
@@ -77,7 +85,7 @@ class MatchPredictorEngine:
         self._train_models()
 
     def reload_data_and_retrain(self, force_regenerate: bool = False) -> Dict[str, Any]:
-        """Reload historical dataset, rebuild feature store, and retrain ML models."""
+        """Reload historical dataset from CSV DB, rebuild feature store, and retrain ML models."""
         self.df = generate_multi_season_dataset(force=force_regenerate)
         self.feature_store = FeatureStore(self.df)
         self._train_models()
@@ -133,8 +141,11 @@ class MatchPredictorEngine:
 
         # Evaluate models on out-of-time test set
         xgb_probs = self.xgb_model.predict_proba(X_test)
+        xgb_probs = xgb_probs / np.sum(xgb_probs, axis=1, keepdims=True)
         rf_probs = self.rf_model.predict_proba(X_test)
+        rf_probs = rf_probs / np.sum(rf_probs, axis=1, keepdims=True)
         ens_probs = 0.55 * xgb_probs + 0.45 * rf_probs
+        ens_probs = ens_probs / np.sum(ens_probs, axis=1, keepdims=True)
 
         xgb_acc = float(accuracy_score(y_test, np.argmax(xgb_probs, axis=1)))
         rf_acc = float(accuracy_score(y_test, np.argmax(rf_probs, axis=1)))

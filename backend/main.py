@@ -40,8 +40,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize global predictor engine on startup
-predictor_engine = MatchPredictorEngine()
+# Initialize global predictor engine on startup (automatically syncs new data into CSV DB on boot)
+predictor_engine = MatchPredictorEngine(auto_sync_on_boot=True)
 
 
 class PredictRequest(BaseModel):
@@ -61,6 +61,7 @@ def health_check() -> Dict[str, Any]:
         "engine": "XGBoost + Random Forest + Dixon-Coles Monte Carlo",
         "leagues": list(LEAGUES.keys()),
         "total_matches_indexed": predictor_engine.metrics.get("total_historical_matches", 0),
+        "last_sync": predictor_engine.last_sync_summary,
     }
 
 
@@ -184,12 +185,19 @@ def get_model_metrics() -> Dict[str, Any]:
 
 
 @app.post("/api/sync-data")
-def sync_data_and_retrain() -> Dict[str, Any]:
-    sync_res = sync_live_football_data_uk()
+def sync_data_and_retrain(
+    league: Optional[str] = Query("PL", description="Active competition code for updated standings")
+) -> Dict[str, Any]:
+    sync_res = sync_live_football_data_uk(advance_season_progress=True)
+    predictor_engine.last_sync_summary = sync_res
     metrics = predictor_engine.reload_data_and_retrain(force_regenerate=False)
+    target_lg = league if (league and league != "ALL" and league in LEAGUES) else "PL"
+    standings = predictor_engine.feature_store.get_league_standings(target_lg)
     return {
         "sync": sync_res,
         "metrics": metrics,
+        "league": LEAGUES[target_lg],
+        "standings": standings,
     }
 
 

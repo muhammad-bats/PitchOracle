@@ -1,419 +1,460 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PitchOracle AI — Football Match Forecaster & Score Predictor</title>
+  <title>PitchOracle — Football Match Forecaster & Score Predictor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <div class="bg-glow bg-glow-1"></div>
-  <div class="bg-glow bg-glow-2"></div>
 
-  <!-- Top Header -->
+  <!-- Top Navigation Bar -->
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <div class="brand-logo">
-          <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="18" cy="18" r="16" stroke="url(#grad1)" stroke-width="2.5" fill="rgba(16, 185, 129, 0.1)" />
-            <polygon points="18,9 24,14 22,22 14,22 12,14" stroke="#10b981" stroke-width="1.8" fill="rgba(16, 185, 129, 0.25)" />
-            <line x1="18" y1="2" x2="18" y2="9" stroke="#3b82f6" stroke-width="1.6" />
-            <line x1="31" y1="11" x2="24" y2="14" stroke="#3b82f6" stroke-width="1.6" />
-            <line x1="28" y1="28" x2="22" y2="22" stroke="#3b82f6" stroke-width="1.6" />
-            <line x1="8" y1="28" x2="14" y2="22" stroke="#3b82f6" stroke-width="1.6" />
-            <line x1="5" y1="11" x2="12" y2="14" stroke="#3b82f6" stroke-width="1.6" />
-            <defs>
-              <linearGradient id="grad1" x1="0" y1="0" x2="36" y2="36">
-                <stop offset="0%" stop-color="#10b981" />
-                <stop offset="100%" stop-color="#3b82f6" />
-              </linearGradient>
-            </defs>
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polygon points="12 7 16.5 10.2 14.8 15.5 9.2 15.5 7.5 10.2"></polygon>
           </svg>
         </div>
-        <div>
-          <div class="brand-title">PitchOracle <span class="brand-badge">HYBRID ML v2.6</span></div>
-          <div class="brand-subtitle">XGBoost • Random Forest • Dixon-Coles 10,000x Monte Carlo</div>
+        <div class="brand-text">
+          <span class="brand-title">PitchOracle</span>
+          <span class="brand-divider">/</span>
+          <span class="brand-subtitle">Match Forecaster</span>
         </div>
       </div>
 
-      <!-- Main Navigation Tabs -->
-      <nav class="main-tabs" role="tablist">
-        <button class="main-tab active" data-view="match-center" id="tab-match-center">
-          <span class="tab-icon">⚡</span> Match Center & Predictor
+      <!-- Segmented Navigation: Match Center & League Standings Only -->
+      <nav class="segmented-nav" role="tablist" aria-label="Primary Views">
+        <button class="seg-btn active" data-view="match-center" id="tab-match-center" role="tab" aria-selected="true">
+          Match Center
         </button>
-        <button class="main-tab" data-view="standings" id="tab-standings">
-          <span class="tab-icon">🏆</span> Standings & xG Tables
-        </button>
-        <button class="main-tab" data-view="ml-lab" id="tab-ml-lab">
-          <span class="tab-icon">🧠</span> ML Model Telemetry
+        <button class="seg-btn" data-view="standings" id="tab-standings" role="tab" aria-selected="false">
+          League Standings
         </button>
       </nav>
 
       <div class="topbar-actions">
-        <div class="telemetry-pill" id="header-telemetry-pill" title="Historical matches indexed in FeatureStore">
-          <span class="status-dot"></span>
-          <span id="header-match-count">4,200+</span> Matches Indexed
-        </div>
-        <button class="btn-sync" id="btn-sync-data" title="Sync latest historical CSVs from football-data.co.uk & retrain models">
-          <span id="sync-icon">↻</span> Sync & Retrain
+        <button class="btn-secondary-quiet" id="btn-sync-data" title="Refresh historical CSV data and retrain models">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+            <path d="M16 16h5v5"></path>
+          </svg>
+          <span id="sync-label">Sync Data</span>
         </button>
       </div>
     </div>
 
-    <!-- Competition Selector Strip -->
-    <div class="league-strip">
-      <div class="league-strip-inner" id="league-pills-container">
-        <!-- Dynamically populated league pills -->
+    <!-- Competition Selector Bar + Marquee Fixtures Trigger -->
+    <div class="subbar">
+      <div class="subbar-inner">
+        <div class="league-pills" id="league-pills-container" role="navigation" aria-label="Competitions">
+          <!-- Populated dynamically with All + 6 European competitions -->
+        </div>
+
+        <button class="btn-unveil-fixtures" id="btn-toggle-fixtures" aria-expanded="false" aria-controls="fixtures-drawer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          <span id="unveil-btn-text">Marquee Fixtures</span>
+          <span class="fixture-pill-count" id="fixtures-count-badge">0</span>
+          <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
       </div>
     </div>
   </header>
 
-  <!-- Main Workspace Container -->
+  <!-- Floating Apple-Style Sheet for Marquee Fixtures (Never Shifts Centered Forecast Block) -->
+  <div class="fixtures-backdrop" id="fixtures-backdrop" aria-hidden="true"></div>
+  <aside class="fixtures-sheet" id="fixtures-drawer" aria-hidden="true" aria-label="Marquee Fixtures">
+    <div class="fixtures-sheet-header">
+      <div>
+        <h2 class="sheet-title" id="sheet-league-title">Marquee Fixtures</h2>
+        <p class="sheet-subtitle">Select any fixture to load its full statistical forecast</p>
+      </div>
+      <button class="btn-close-sheet" id="btn-close-fixtures" aria-label="Close fixtures panel">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="fixtures-sheet-grid" id="fixtures-list-container">
+      <!-- Populated by app.js -->
+    </div>
+  </aside>
+
+  <!-- Centered Main Workspace -->
   <main class="workspace">
 
-    <!-- VIEW 1: MATCH CENTER & PREDICTOR -->
+    <!-- VIEW 1: CENTER-ALIGNED MATCH CENTER & FORECAST BLOCK -->
     <section id="view-match-center" class="view-section active">
-      <div class="match-center-grid">
+      <div class="forecast-container" id="forecast-dashboard">
 
-        <!-- Left Sidebar: Custom Matchup Builder + Upcoming Fixtures -->
-        <aside class="fixtures-sidebar">
-          <!-- Custom Matchup Builder Card -->
-          <div class="glass-card builder-card">
-            <div class="card-header-compact">
-              <div class="card-title-sm">
-                <span class="accent-dot"></span> Custom Matchup Lab
+        <!-- Minimalist Custom Dropdown Matchup Bar -->
+        <div class="surface-card matchup-bar-card">
+          <div class="matchup-bar-row">
+            <!-- Custom Minimalist Dropdown: Home Club -->
+            <div class="selector-field">
+              <span class="dropdown-field-label">Home Club</span>
+              <div class="custom-dropdown" id="dropdown-home">
+                <button type="button" class="dropdown-trigger" id="trigger-home-team" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="dropdown-trigger-left">
+                    <span class="club-swatch" id="swatch-home-trigger"></span>
+                    <span class="dropdown-selected-text" id="text-home-trigger">Arsenal</span>
+                  </span>
+                  <svg class="dropdown-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="dropdown-menu" id="menu-home-team" role="listbox">
+                  <div class="dropdown-search-wrap">
+                    <input type="text" class="dropdown-search-input" id="search-home-team" placeholder="Filter clubs…" autocomplete="off" />
+                  </div>
+                  <div class="dropdown-options-list" id="options-home-team"></div>
+                </div>
               </div>
-              <button class="btn-swap" id="btn-swap-teams" title="Swap Home & Away Teams">⇄ Swap</button>
             </div>
-            <p class="builder-helper">Pit any two clubs against each other across domestic leagues or Champions League.</p>
-            <div class="builder-selectors">
-              <div class="selector-group">
-                <label for="select-home-team">HOME CLUB</label>
-                <select id="select-home-team" class="club-select"></select>
-              </div>
-              <div class="vs-divider">VS</div>
-              <div class="selector-group">
-                <label for="select-away-team">AWAY CLUB</label>
-                <select id="select-away-team" class="club-select"></select>
-              </div>
-            </div>
-            <button class="btn-primary-predict" id="btn-run-custom-predict">
-              Run Ensemble Forecast →
+
+            <button class="btn-icon-swap" id="btn-swap-teams" title="Swap Home and Away clubs" aria-label="Swap Home and Away clubs">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="17 1 21 5 17 9"></polyline>
+                <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                <polyline points="7 23 3 19 7 15"></polyline>
+                <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+              </svg>
             </button>
-          </div>
 
-          <!-- Upcoming Fixtures List -->
-          <div class="glass-card fixtures-list-card">
-            <div class="card-header-compact">
-              <div class="card-title-sm">
-                <span>📅</span> Upcoming Marquee Fixtures
-              </div>
-              <span class="fixture-count-badge" id="fixtures-count-badge">0</span>
-            </div>
-            <div class="fixtures-scroll" id="fixtures-list-container">
-              <!-- Populated by app.js -->
-            </div>
-          </div>
-        </aside>
-
-        <!-- Right Main Area: Deep Match Forecast Dashboard -->
-        <div class="forecast-main" id="forecast-dashboard">
-
-          <!-- Hero Match Scoreboard & Probability Bar -->
-          <div class="glass-card hero-forecast-card" id="hero-card">
-            <div class="hero-top-meta">
-              <div class="hero-competition-badge" id="hero-league-badge">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League</div>
-              <div class="hero-stadium" id="hero-stadium">🏟️ Emirates Stadium</div>
-              <div class="hero-sim-badge">10,000x Monte Carlo Simulation</div>
-            </div>
-
-            <div class="hero-teams-row">
-              <!-- Home Team Column -->
-              <div class="hero-team home" id="hero-home-col">
-                <div class="team-crest-wrapper" id="home-crest-box"></div>
-                <div class="team-info">
-                  <h2 class="team-name" id="hero-home-name">Arsenal</h2>
-                  <div class="team-meta-row">
-                    <span class="elo-pill" id="hero-home-elo">Elo 1965</span>
-                    <div class="form-pills" id="hero-home-form"></div>
+            <!-- Custom Minimalist Dropdown: Away Club -->
+            <div class="selector-field">
+              <span class="dropdown-field-label">Away Club</span>
+              <div class="custom-dropdown" id="dropdown-away">
+                <button type="button" class="dropdown-trigger" id="trigger-away-team" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="dropdown-trigger-left">
+                    <span class="club-swatch" id="swatch-away-trigger"></span>
+                    <span class="dropdown-selected-text" id="text-away-trigger">Manchester City</span>
+                  </span>
+                  <svg class="dropdown-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="dropdown-menu" id="menu-away-team" role="listbox">
+                  <div class="dropdown-search-wrap">
+                    <input type="text" class="dropdown-search-input" id="search-away-team" placeholder="Filter clubs…" autocomplete="off" />
                   </div>
-                </div>
-              </div>
-
-              <!-- Center Predicted Score Spotlight -->
-              <div class="hero-score-center">
-                <div class="predicted-label">MOST LIKELY SCORELINE</div>
-                <div class="predicted-score-box">
-                  <span id="hero-pred-score">2 - 1</span>
-                </div>
-                <div class="predicted-prob-sub" id="hero-pred-score-prob">11.4% Exact Probability</div>
-                <div class="xg-comparison-pill">
-                  <span id="hero-home-xg">1.82 xG</span>
-                  <span class="xg-sep">•</span>
-                  <span id="hero-away-xg">1.14 xG</span>
-                </div>
-              </div>
-
-              <!-- Away Team Column -->
-              <div class="hero-team away" id="hero-away-col">
-                <div class="team-crest-wrapper" id="away-crest-box"></div>
-                <div class="team-info">
-                  <h2 class="team-name" id="hero-away-name">Manchester City</h2>
-                  <div class="team-meta-row">
-                    <span class="elo-pill" id="hero-away-elo">Elo 1985</span>
-                    <div class="form-pills" id="hero-away-form"></div>
-                  </div>
+                  <div class="dropdown-options-list" id="options-away-team"></div>
                 </div>
               </div>
             </div>
 
-            <!-- 1X2 Win Probability Bar -->
-            <div class="prob-section">
-              <div class="prob-labels">
-                <div class="prob-label-item home">
-                  <span class="prob-team-label" id="prob-label-home">HOME WIN</span>
-                  <span class="prob-pct" id="prob-val-home">46.2%</span>
-                </div>
-                <div class="prob-label-item draw">
-                  <span class="prob-team-label">DRAW</span>
-                  <span class="prob-pct" id="prob-val-draw">24.8%</span>
-                </div>
-                <div class="prob-label-item away">
-                  <span class="prob-pct" id="prob-val-away">29.0%</span>
-                  <span class="prob-team-label" id="prob-label-away">AWAY WIN</span>
-                </div>
-              </div>
-              <div class="prob-bar-track">
-                <div class="prob-bar-fill home" id="bar-fill-home" style="width: 46.2%"></div>
-                <div class="prob-bar-fill draw" id="bar-fill-draw" style="width: 24.8%"></div>
-                <div class="prob-bar-fill away" id="bar-fill-away" style="width: 29.0%"></div>
-              </div>
+            <div class="selector-action">
+              <button class="btn-primary-apple" id="btn-run-custom-predict">
+                Update Forecast
+              </button>
             </div>
+          </div>
+        </div>
 
-            <!-- Tactical Insights Strip -->
-            <div class="insights-strip" id="tactical-insights-container"></div>
+        <!-- Hero Forecast Block -->
+        <div class="surface-card hero-card" id="hero-card">
+          <div class="hero-meta-bar">
+            <span class="meta-competition" id="hero-league-badge">Premier League</span>
+            <span class="meta-dot">•</span>
+            <span class="meta-stadium" id="hero-stadium">Emirates Stadium</span>
+            <span class="meta-dot">•</span>
+            <span class="meta-sim">10,000 Simulations</span>
           </div>
 
-          <!-- Interactive What-If Tactical Simulator Controls -->
-          <div class="glass-card what-if-card">
-            <div class="card-header-flex">
+          <div class="hero-matchup-grid">
+            <!-- Home Club -->
+            <div class="club-column home">
+              <div class="club-monogram-wrap" id="home-crest-box"></div>
+              <div class="club-identity">
+                <h1 class="club-title" id="hero-home-name">Arsenal</h1>
+                <div class="club-submeta">
+                  <span class="elo-tag" id="hero-home-elo">Elo 1965</span>
+                  <div class="form-dots" id="hero-home-form"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Elevated Projected Score Card -->
+            <div class="projected-score-card">
+              <div class="projected-score-header">
+                <span class="eyebrow-label">Projected Scoreline</span>
+              </div>
+              <div class="projected-score-main">
+                <div class="projected-digit-col">
+                  <span class="projected-digit" id="hero-pred-home-goals">1</span>
+                  <span class="projected-team-bar" id="hero-pred-home-bar"></span>
+                </div>
+                <span class="projected-score-sep">:</span>
+                <div class="projected-digit-col">
+                  <span class="projected-digit" id="hero-pred-away-goals">1</span>
+                  <span class="projected-team-bar" id="hero-pred-away-bar"></span>
+                </div>
+              </div>
+              <div class="projected-score-meta">
+                <span class="projected-prob-badge" id="hero-pred-score-prob">11.2% Exact Probability</span>
+              </div>
+              <div class="projected-xg-strip">
+                <div class="xg-side">
+                  <span class="xg-label">Home xG</span>
+                  <span class="xg-val" id="hero-home-xg">1.82</span>
+                </div>
+                <div class="xg-vertical-rule"></div>
+                <div class="xg-side">
+                  <span class="xg-label">Away xG</span>
+                  <span class="xg-val" id="hero-away-xg">1.14</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Away Club -->
+            <div class="club-column away">
+              <div class="club-monogram-wrap" id="away-crest-box"></div>
+              <div class="club-identity">
+                <h1 class="club-title" id="hero-away-name">Manchester City</h1>
+                <div class="club-submeta">
+                  <span class="elo-tag" id="hero-away-elo">Elo 1985</span>
+                  <div class="form-dots" id="hero-away-form"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 1X2 Outcome Probability Distribution (Dynamic Team Primary Colors) -->
+          <div class="outcome-distribution">
+            <div class="outcome-labels">
+              <div class="outcome-col">
+                <span class="outcome-name" id="prob-label-home">Arsenal</span>
+                <span class="outcome-value" id="prob-val-home">46.2%</span>
+              </div>
+              <div class="outcome-col center">
+                <span class="outcome-name">Draw</span>
+                <span class="outcome-value draw-ink" id="prob-val-draw">24.8%</span>
+              </div>
+              <div class="outcome-col right">
+                <span class="outcome-name" id="prob-label-away">Man City</span>
+                <span class="outcome-value" id="prob-val-away">29.0%</span>
+              </div>
+            </div>
+            <div class="outcome-bar-track">
+              <div class="outcome-segment home" id="bar-fill-home" style="width: 46.2%"></div>
+              <div class="outcome-segment draw" id="bar-fill-draw" style="width: 24.8%"></div>
+              <div class="outcome-segment away" id="bar-fill-away" style="width: 29.0%"></div>
+            </div>
+          </div>
+
+          <!-- Editorial Tactical Summary -->
+          <div class="editorial-notes" id="tactical-insights-container"></div>
+        </div>
+
+        <!-- Tactical Parameters ("What-If" Adjustments) -->
+        <div class="surface-card parameters-card">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Scenario Adjustments</h2>
+              <p class="section-desc">Modify form momentum, match tempo, or venue neutrality to inspect model sensitivity.</p>
+            </div>
+            <button class="btn-text-reset" id="btn-reset-whatif">Reset</button>
+          </div>
+
+          <div class="controls-grid">
+            <div class="control-box">
+              <div class="control-label-row">
+                <span id="label-slider-home">Home Form Adjustment</span>
+                <span class="control-readout" id="val-slider-home">0.0</span>
+              </div>
+              <input type="range" class="apple-slider" id="slider-home-boost" min="-1.0" max="1.0" step="0.1" value="0.0" />
+              <div class="control-scale"><span>Depleted</span><span>Baseline</span><span>Peak</span></div>
+            </div>
+
+            <div class="control-box">
+              <div class="control-label-row">
+                <span id="label-slider-away">Away Form Adjustment</span>
+                <span class="control-readout" id="val-slider-away">0.0</span>
+              </div>
+              <input type="range" class="apple-slider" id="slider-away-boost" min="-1.0" max="1.0" step="0.1" value="0.0" />
+              <div class="control-scale"><span>Depleted</span><span>Baseline</span><span>Peak</span></div>
+            </div>
+
+            <div class="control-box">
+              <div class="control-label-row">
+                <span>Tactical Tempo</span>
+                <span class="control-readout" id="val-slider-tempo">0.0</span>
+              </div>
+              <input type="range" class="apple-slider" id="slider-tempo" min="-1.0" max="1.0" step="0.1" value="0.0" />
+              <div class="control-scale"><span>Measured</span><span>Standard</span><span>Open</span></div>
+            </div>
+
+            <div class="control-box toggle-box">
+              <label class="apple-toggle-row" for="toggle-neutral-venue">
+                <div>
+                  <div class="toggle-heading">Neutral Ground</div>
+                  <div class="toggle-caption">Remove home stadium effect</div>
+                </div>
+                <input type="checkbox" class="apple-switch" id="toggle-neutral-venue" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Two-Column Grid: Scoreline Matrix & Model Breakdown -->
+        <div class="bento-grid">
+          <!-- 7x7 Scoreline Matrix (Clickable Cells with Statistical Popover) -->
+          <div class="surface-card matrix-card-wrapper">
+            <div class="section-header">
               <div>
-                <h3 class="card-title">🎛️ Interactive "What-If" Tactical Simulator</h3>
-                <p class="card-subtitle">Adjust team morale/injuries, tactical tempo, or neutral venue to stress-test the ML forecast in real time.</p>
-              </div>
-              <button class="btn-reset" id="btn-reset-whatif">Reset Baseline</button>
-            </div>
-            <div class="what-if-grid">
-              <div class="slider-control">
-                <div class="slider-header">
-                  <span id="label-slider-home">Home Form & Lineup Boost</span>
-                  <span class="slider-val" id="val-slider-home">0.0</span>
-                </div>
-                <input type="range" id="slider-home-boost" min="-1.0" max="1.0" step="0.1" value="0.0" />
-                <div class="slider-ticks"><span>Key Injuries (-1)</span><span>Baseline</span><span>Peak Form (+1)</span></div>
-              </div>
-
-              <div class="slider-control">
-                <div class="slider-header">
-                  <span id="label-slider-away">Away Form & Lineup Boost</span>
-                  <span class="slider-val" id="val-slider-away">0.0</span>
-                </div>
-                <input type="range" id="slider-away-boost" min="-1.0" max="1.0" step="0.1" value="0.0" />
-                <div class="slider-ticks"><span>Key Injuries (-1)</span><span>Baseline</span><span>Peak Form (+1)</span></div>
-              </div>
-
-              <div class="slider-control">
-                <div class="slider-header">
-                  <span>Tactical Match Tempo</span>
-                  <span class="slider-val" id="val-slider-tempo">0.0</span>
-                </div>
-                <input type="range" id="slider-tempo" min="-1.0" max="1.0" step="0.1" value="0.0" />
-                <div class="slider-ticks"><span>Low Block (-1)</span><span>Standard</span><span>High Press (+1)</span></div>
-              </div>
-
-              <div class="toggle-control">
-                <label class="switch-label" for="toggle-neutral-venue">
-                  <input type="checkbox" id="toggle-neutral-venue" />
-                  <span class="switch-Custom"></span>
-                  <div>
-                    <div class="toggle-title">Neutral Venue Mode</div>
-                    <div class="toggle-desc">Remove home stadium advantage (e.g. UCL Final)</div>
-                  </div>
-                </label>
+                <h2 class="section-title">Exact Scoreline Matrix</h2>
+                <p class="section-desc">Click any scoreline cell to inspect detailed Poisson & simulation metrics</p>
               </div>
             </div>
+
+            <div class="matrix-container">
+              <div class="matrix-axis-top" id="heatmap-away-axis-label">Away Goals →</div>
+              <div class="matrix-inner">
+                <div class="matrix-axis-side" id="heatmap-home-axis-label">Home Goals ↓</div>
+                <div class="matrix-grid" id="score-heatmap-grid"></div>
+              </div>
+            </div>
+
+            <!-- Interactive Scoreline Detail Pop-Up -->
+            <div class="scoreline-popup" id="scoreline-detail-popup" aria-hidden="true">
+              <div class="scoreline-popup-header">
+                <div>
+                  <span class="popup-eyebrow" id="popup-outcome-tag">Home Win</span>
+                  <h3 class="popup-score-title" id="popup-score-title">Arsenal 2 – 1 Man City</h3>
+                </div>
+                <button type="button" class="btn-close-popup" id="btn-close-score-popup" aria-label="Close scoreline details">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+              <div class="scoreline-popup-grid" id="popup-stats-grid"></div>
+              <p class="scoreline-popup-note" id="popup-stat-note"></p>
+            </div>
+
+            <div class="sub-eyebrow">Most Probable Outcomes</div>
+            <div class="top-outcomes-strip" id="top-scorelines-container"></div>
           </div>
 
-          <!-- Two-Column Row: Scoreline Heatmap Matrix + Model Consensus & Markets -->
-          <div class="two-col-grid">
-            <!-- 7x7 Scoreline Probability Heatmap -->
-            <div class="glass-card">
-              <div class="card-header-flex">
-                <div>
-                  <h3 class="card-title">🎯 Exact Scoreline Probability Matrix (7×7)</h3>
-                  <p class="card-subtitle">Dixon-Coles bivariate Poisson calibrated with Hybrid Ensemble</p>
-                </div>
+          <!-- Model Consensus & Goal Markets -->
+          <div class="surface-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Model Consensus & Goal Markets</h2>
+                <p class="section-desc">Sub-model probability split across ensemble components</p>
               </div>
-              <div class="heatmap-wrapper">
-                <div class="heatmap-axis-label-top" id="heatmap-away-axis-label">Away Team Goals →</div>
-                <div class="heatmap-body">
-                  <div class="heatmap-axis-label-left" id="heatmap-home-axis-label">Home Team Goals ↓</div>
-                  <div class="heatmap-grid" id="score-heatmap-grid"></div>
-                </div>
-              </div>
-
-              <div class="top-scores-title">Top 6 Most Likely Exact Scorelines</div>
-              <div class="top-scores-row" id="top-scorelines-container"></div>
             </div>
 
-            <!-- Model Consensus & Goal Markets -->
-            <div class="glass-card">
-              <div class="card-header-flex">
-                <div>
-                  <h3 class="card-title">🤖 Multi-Model Consensus & Goal Markets</h3>
-                  <p class="card-subtitle">Comparing tree-based classifiers against statistical Poisson models</p>
-                </div>
-              </div>
+            <div class="consensus-stack" id="model-consensus-container"></div>
 
-              <div class="model-comparison-list" id="model-consensus-container"></div>
-
-              <div class="markets-divider"></div>
-              <h4 class="sub-section-title">Simulated Goal & BTTS Markets</h4>
-              <div class="markets-grid" id="goal-markets-container"></div>
-            </div>
+            <div class="hairline-divider"></div>
+            <div class="sub-eyebrow">Simulated Goal Totals & BTTS</div>
+            <div class="markets-bento" id="goal-markets-container"></div>
           </div>
-
-          <!-- Two-Column Row: Simulated Match Stats + Tactical Radar & Goal Timeline -->
-          <div class="two-col-grid">
-            <!-- Simulated Match Statistics -->
-            <div class="glass-card">
-              <div class="card-header-flex">
-                <div>
-                  <h3 class="card-title">📊 Simulated Match Statistics (90 Min)</h3>
-                  <p class="card-subtitle">Expected output across 10,000 Monte Carlo match simulations</p>
-                </div>
-              </div>
-              <div class="sim-stats-list" id="simulated-stats-container"></div>
-            </div>
-
-            <!-- Tactical Radar & 15-Minute Goal Timeline -->
-            <div class="glass-card">
-              <div class="card-header-flex">
-                <div>
-                  <h3 class="card-title">🕸️ Tactical Profile Radar & Goal Timing</h3>
-                  <p class="card-subtitle">6-axis team attribute comparison & 15-minute scoring intensity</p>
-                </div>
-              </div>
-              <div class="radar-container" id="tactical-radar-container"></div>
-              <h4 class="sub-section-title">15-Minute Goal Probability Distribution</h4>
-              <div class="timeline-chart" id="goal-timeline-container"></div>
-            </div>
-          </div>
-
-          <!-- Two-Column Row: Explainable AI (XAI) Drivers + Head-to-Head & Recent Form -->
-          <div class="two-col-grid">
-            <!-- Explainable AI Match Drivers -->
-            <div class="glass-card">
-              <div class="card-header-flex">
-                <div>
-                  <h3 class="card-title">🔍 Explainable AI — Key Matchup Drivers</h3>
-                  <p class="card-subtitle">Pre-match feature differentials driving the ensemble forecast</p>
-                </div>
-              </div>
-              <div class="drivers-list" id="match-drivers-container"></div>
-            </div>
-
-            <!-- Head-to-Head History -->
-            <div class="glass-card">
-              <div class="card-header-flex">
-                <div>
-                  <h3 class="card-title">⚔️ Head-to-Head (H2H) History & Recent Form</h3>
-                  <p class="card-subtitle">Historical meetings and recent domestic/continental results</p>
-                </div>
-              </div>
-              <div id="h2h-summary-container"></div>
-            </div>
-          </div>
-
         </div>
+
+        <!-- Two-Column Grid: Simulated Match Stats & Tactical Profile -->
+        <div class="bento-grid">
+          <div class="surface-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Simulated Match Statistics</h2>
+                <p class="section-desc">Projected 90-minute match averages across 10,000 runs</p>
+              </div>
+            </div>
+            <div class="stats-comparison-stack" id="simulated-stats-container"></div>
+          </div>
+
+          <div class="surface-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Team Attribute Profile & Goal Timing</h2>
+                <p class="section-desc">Six-axis tactical comparison and 15-minute scoring windows</p>
+              </div>
+            </div>
+            <div class="radar-legend" id="radar-legend-container"></div>
+            <div class="radar-wrap" id="tactical-radar-container"></div>
+            <div class="hairline-divider"></div>
+            <div class="sub-eyebrow">Scoring Probability by 15-Minute Interval</div>
+            <div class="interval-grid" id="goal-timeline-container"></div>
+          </div>
+        </div>
+
+        <!-- Two-Column Grid: Key Matchup Drivers & Head-to-Head History -->
+        <div class="bento-grid">
+          <div class="surface-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Key Forecast Drivers</h2>
+                <p class="section-desc">Pre-match differentials influencing the prediction</p>
+              </div>
+            </div>
+            <div class="drivers-stack" id="match-drivers-container"></div>
+          </div>
+
+          <div class="surface-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Head-to-Head Record</h2>
+                <p class="section-desc">Historical meetings and aggregate scoring</p>
+              </div>
+            </div>
+            <div id="h2h-summary-container"></div>
+          </div>
+        </div>
+
       </div>
     </section>
 
-    <!-- VIEW 2: LEAGUE STANDINGS & xG TABLES -->
+    <!-- VIEW 2: LEAGUE STANDINGS -->
     <section id="view-standings" class="view-section">
-      <div class="glass-card standings-card">
-        <div class="card-header-flex">
-          <div>
-            <h2 class="card-title" id="standings-title">Premier League — Standings & Expected Goals (xG) Table</h2>
-            <p class="card-subtitle" id="standings-subtitle">Live club Elo ratings, goal differentials, underlying xG performance, and 5-match form</p>
-          </div>
-        </div>
-        <div class="table-responsive">
-          <table class="standings-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Club</th>
-                <th>MP</th>
-                <th>W</th>
-                <th>D</th>
-                <th>L</th>
-                <th>GF</th>
-                <th>GA</th>
-                <th>GD</th>
-                <th>xG</th>
-                <th>xGA</th>
-                <th>Club Elo</th>
-                <th>Pts</th>
-                <th>Last 5</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="standings-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- VIEW 3: ML MODEL TELEMETRY & FEATURE IMPORTANCE -->
-    <section id="view-ml-lab" class="view-section">
-      <div class="ml-kpi-grid" id="ml-kpi-container"></div>
-
-      <div class="two-col-grid">
-        <div class="glass-card">
-          <div class="card-header-flex">
+      <div class="forecast-container">
+        <div class="surface-card standings-card">
+          <div class="section-header">
             <div>
-              <h3 class="card-title">📈 Global Feature Importance (XGBoost vs Random Forest)</h3>
-              <p class="card-subtitle">Relative contribution of top pre-match features across 28 engineered dimensions</p>
+              <h2 class="section-title" id="standings-title">Premier League Standings</h2>
+              <p class="section-desc" id="standings-subtitle">Club Elo ratings, goal differential, expected goals (xG), and recent form</p>
             </div>
           </div>
-          <div class="feature-imp-list" id="feature-importance-container"></div>
-        </div>
-
-        <div class="glass-card">
-          <div class="card-header-flex">
-            <div>
-              <h3 class="card-title">⚙️ Hybrid Ensemble Architecture & Methodology</h3>
-              <p class="card-subtitle">How PitchOracle combines gradient boosted trees with statistical count models</p>
-            </div>
-          </div>
-          <div class="methodology-content">
-            <div class="method-block">
-              <div class="method-badge xgb">1. XGBoost Multi-Class Classifier (40% Weight)</div>
-              <p>Gradient boosted decision trees (`max_depth=4, n_estimators=220, learning_rate=0.045`) trained on 28 strictly pre-match features using `multi:softprob` objective. Captures non-linear interactions between Club Elo momentum, venue-specific scoring rates, and H2H dominance.</p>
-            </div>
-            <div class="method-block">
-              <div class="method-badge rf">2. Random Forest Classifier (25% Weight)</div>
-              <p>Bagged ensemble of 260 deep decision trees (`min_samples_leaf=8`) providing variance reduction and calibrated out-of-bag probability estimates in high-parity matchups.</p>
-            </div>
-            <div class="method-block">
-              <div class="method-badge dc">3. Dixon-Coles Bivariate Poisson + 10,000x Monte Carlo (35% Weight)</div>
-              <p>Estimates club attacking ($\alpha_i$) and defensive ($\beta_j$) rates with low-score correlation parameter $\rho = -0.085$ to accurately model `0-0`, `1-0`, `0-1`, and `1-1` scorelines, generating the 7×7 exact score matrix and 90-minute match telemetry.</p>
-            </div>
+          <div class="table-scroll">
+            <table class="apple-table">
+              <thead>
+                <tr>
+                  <th>Pos</th>
+                  <th>Club</th>
+                  <th>MP</th>
+                  <th>W</th>
+                  <th>D</th>
+                  <th>L</th>
+                  <th>GF</th>
+                  <th>GA</th>
+                  <th>GD</th>
+                  <th>xG</th>
+                  <th>xGA</th>
+                  <th>Elo</th>
+                  <th>Pts</th>
+                  <th>Form</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="standings-tbody"></tbody>
+            </table>
           </div>
         </div>
       </div>

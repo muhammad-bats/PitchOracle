@@ -12,7 +12,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from backend.data_loader import LEAGUES, get_clubs_dict
+from backend.data_loader import (
+    LEAGUES,
+    get_clubs_dict,
+    get_current_season_label,
+    register_dynamic_club,
+)
 
 FEATURE_COLUMNS: List[str] = [
     "home_elo",
@@ -228,10 +233,14 @@ class FeatureStore:
             ftag = int(row["ftag"])
             ftr = str(row["ftr"])
 
+            if home not in self.clubs:
+                self.clubs[home] = register_dynamic_club(home, lg)
+            if away not in self.clubs:
+                self.clubs[away] = register_dynamic_club(away, lg)
             if home not in self.current_elo:
-                self.current_elo[home] = 1740.0
+                self.current_elo[home] = self.clubs[home]["base_elo"]
             if away not in self.current_elo:
-                self.current_elo[away] = 1740.0
+                self.current_elo[away] = self.clubs[away]["base_elo"]
 
             # Extract strictly pre-match features
             feats = self.extract_match_feature_vector(home, away, lg)
@@ -397,11 +406,18 @@ class FeatureStore:
             "recent_meetings": meetings[:6],
         }
 
-    def get_league_standings(self, league_code: str, season: str = "2026/27") -> List[Dict[str, Any]]:
+    def get_league_standings(self, league_code: str, season: Optional[str] = None) -> List[Dict[str, Any]]:
         """Compute current season league table with xG, GD, Form, and Elo."""
-        sub = self.df[(self.df["league"] == league_code) & (self.df["season"] == season)]
+        lg_df = self.df[self.df["league"] == league_code]
+        if season is None:
+            if not lg_df.empty and "season" in lg_df.columns:
+                season = str(lg_df["season"].iloc[-1])
+            else:
+                season = get_current_season_label()
+
+        sub = lg_df[lg_df["season"] == season]
         if sub.empty:
-            sub = self.df[self.df["league"] == league_code]
+            sub = lg_df
 
         stats: Dict[str, Dict[str, Any]] = {}
         for name, meta in self.clubs.items():
@@ -438,7 +454,25 @@ class FeatureStore:
                 (a, ftag, fthg, axg, hxg),
             ]:
                 if team not in stats:
-                    continue
+                    meta = self.clubs.get(team) or register_dynamic_club(team, league_code)
+                    stats[team] = {
+                        "team": team,
+                        "short_name": meta["short_name"],
+                        "tla": meta["tla"],
+                        "color": meta["primary_color"],
+                        "played": 0,
+                        "won": 0,
+                        "drawn": 0,
+                        "lost": 0,
+                        "gf": 0,
+                        "ga": 0,
+                        "gd": 0,
+                        "points": 0,
+                        "xg": 0.0,
+                        "xga": 0.0,
+                        "elo": round(float(self.current_elo.get(team, meta["base_elo"])), 1),
+                        "form": [m["result"] for m in self.team_history.get(team, [])[-5:]],
+                    }
                 st = stats[team]
                 st["played"] += 1
                 st["gf"] += gf

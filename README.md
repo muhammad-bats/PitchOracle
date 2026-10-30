@@ -50,7 +50,7 @@ The platform monitors, indexes, and predicts fixtures across Europe's premier co
 - **Dynamic Club Selection**: Fast, searchable dropdown menus designed with minimalist aesthetics, isolating club identities from statistical noise prior to selection.
 - **Marquee Fixtures Unveiler**: Expandable drawer surfacing top-tier upcoming matchday fixtures with calculated kickoff venues, dates, and stage metadata.
 - **Ensemble 1X2 Probabilities & Fair Odds**: Real-time calibrated probability distributions for Home Win, Draw, and Away Win with calculated decimal fair odds.
-- **Expected Scoreline & Goals**: Projected primary scoreline with independent Expected Goals ($\text{xG}_{\text{home}}, \text{xG}_{\text{away}}$) decomposed down to second-decimal precision.
+- **Expected Scoreline & Goals**: Projected primary scoreline with independent Expected Goals ($xG_{\text{home}}, xG_{\text{away}}$) decomposed down to second-decimal precision.
 
 ### 2. 7×7 Exact Scoreline Probability Matrix
 - **Joint Probability Heatmap**: $7 \times 7$ probability grid modeling all score combinations from `0-0` through `6-6`.
@@ -177,12 +177,13 @@ PitchOracle applies the **Dixon and Coles (1997)** parameterization:
 $$P(X=x, Y=y) = \tau_{\lambda_x, \lambda_y}(x, y) \cdot \frac{\lambda_x^x e^{-\lambda_x}}{x!} \cdot \frac{\lambda_y^y e^{-\lambda_y}}{y!}$$
 
 Where the adjustment factor $\tau(x, y)$ applies low-score correlation parameter $\rho \approx -0.085$:
-$$\tau(x, y) = \begin{cases}
-1 - \lambda_x \lambda_y \rho & x=0, y=0 \\
-1 + \lambda_x \rho & x=0, y=1 \\
-1 + \lambda_y \rho & x=1, y=0 \\
-1 - \rho & x=1, y=1 \\
-1 & \text{otherwise}
+
+$$\tau(x, y) = \begin{cases} 
+1 - \lambda_x \lambda_y \rho & \text{if } x=0, y=0 \\ 
+1 + \lambda_x \rho & \text{if } x=0, y=1 \\ 
+1 + \lambda_y \rho & \text{if } x=1, y=0 \\ 
+1 - \rho & \text{if } x=1, y=1 \\ 
+1 & \text{otherwise} 
 \end{cases}$$
 
 ### 4. 10,000-Iteration Monte Carlo Simulation

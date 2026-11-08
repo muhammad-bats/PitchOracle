@@ -1,3 +1,13 @@
+---
+title: PitchOracle
+emoji: ⚽
+colorFrom: indigo
+colorTo: slate
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 <div align="center">
 
 # ⚽ PitchOracle

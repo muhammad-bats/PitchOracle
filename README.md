@@ -1,13 +1,3 @@
----
-title: PitchOracle
-emoji: ⚽
-colorFrom: indigo
-colorTo: slate
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 <div align="center">
 
 # ⚽ PitchOracle
@@ -17,6 +7,8 @@ An enterprise-grade sports analytics and machine learning system for forecasting
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Google Cloud Run](https://img.shields.io/badge/Google_Cloud_Run-Ready-4285F4?style=flat&logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
+[![Vercel](https://img.shields.io/badge/Vercel-Deployed-000000?style=flat&logo=vercel&logoColor=white)](https://vercel.com/)
 [![XGBoost](https://img.shields.io/badge/XGBoost-2.0+-EB5424?style=flat&logo=xgboost&logoColor=white)](https://xgboost.readthedocs.io/)
 [![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.4+-F7931E?style=flat&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
